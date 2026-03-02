@@ -1,11 +1,11 @@
-export type Routine = {
+export interface Routine {
   id: number;
-  section: string;
+  section?: string;
   time: string;
   activity: string;
   duration: string;
   notes: string;
-};
+}
 
 export const routineData: Routine[] = [
   // 🏠 HOME DAYS (Feb 18–23)

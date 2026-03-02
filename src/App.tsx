@@ -85,7 +85,7 @@ function App() {
           <div className="flex-1 flex justify-center">
             <div className="w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
               <Routes>
-                <Route path="/" element={<RoutinePage />} />
+                <Route path="/" element={<RoutinePage onAddRoutine={() => {}} />} />
                 <Route path="/today" element={<TodayPage />} />
                 <Route path="/monthly" element={<MonthlyReportPage />} />
                 <Route path="/money" element={<MoneyTrackerPage />} />
