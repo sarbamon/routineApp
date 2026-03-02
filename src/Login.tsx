@@ -11,25 +11,31 @@ function Login({ onLogin }: Props) {
 
 const handleLogin = async () => {
   try {
-    const res = await fetch("https://your-app.onrender.com/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ username, password }),
-    });
+    const res = await fetch(
+      "https://routineapp-backend-production.up.railway.app/api/auth/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          username,
+          password
+        })
+      }
+    );
 
     const data = await res.json();
 
-    if (res.ok) {
+    if (data.token) {
       localStorage.setItem("token", data.token);
       onLogin();
     } else {
-      setError(data.message || "Invalid username or password");
+      setError(data.message);
     }
 
   } catch {
-    setError("Server is not responding. Please try again later.");
+    setError("Server not responding");
   }
 };
 
