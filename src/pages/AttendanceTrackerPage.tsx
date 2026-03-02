@@ -1,0 +1,17 @@
+function AttendanceTrackerPage() {
+  return (
+    <div>
+      <h1 className="text-4xl font-bold text-slate-800 mb-6">
+        📚 Attendance Tracker
+      </h1>
+
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <p className="text-slate-600">
+          Coming Soon
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default AttendanceTrackerPage;
