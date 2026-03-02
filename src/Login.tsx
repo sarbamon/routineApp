@@ -9,22 +9,27 @@ function Login({ onLogin }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleLogin = async () => {
-  const res = await fetch("https://your-app.onrender.com/api/auth/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ username, password }),
-  });
+const handleLogin = async () => {
+  try {
+    const res = await fetch("https://your-app.onrender.com/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (res.ok) {
-    localStorage.setItem("token", data.token);
-    onLogin();
-  } else {
-    setError(data.message);
+    if (res.ok) {
+      localStorage.setItem("token", data.token);
+      onLogin();
+    } else {
+      setError(data.message || "Invalid username or password");
+    }
+
+  } catch {
+    setError("Server is not responding. Please try again later.");
   }
 };
 
