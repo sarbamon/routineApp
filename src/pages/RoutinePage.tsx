@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import AddRoutineForm from "../components/AddRoutineForm";
 import RoutineTable from "../components/RoutineTable";
 import { API_URL } from "../config/api";
-import { Routine } from "../types/routine";
+import { Routine } from "../types/Routine";
 
 function RoutinePage() {
 

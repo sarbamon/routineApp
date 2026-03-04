@@ -1,4 +1,4 @@
-import { Routine } from "../types/routine";
+import { Routine } from "../types/Routine";
 import { API_URL } from "../config/api";
 import { useState } from "react";
 
