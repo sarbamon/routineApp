@@ -6,26 +6,42 @@ import { Routine } from "../types/Routine";
 
 function RoutinePage() {
 
-  const [routines,setRoutines] = useState<Routine[]>([]);
+  const [routines, setRoutines] = useState<Routine[]>([]);
 
-const fetchRoutines = async () => {
+  const fetchRoutines = async () => {
 
-  const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token");
 
-  const res = await fetch(`${API_URL}/api/routines`, {
-    headers: {
-      Authorization: `Bearer ${token}`
+    if (!token) {
+      console.log("No token found");
+      return;
     }
-  });
 
-  const data = await res.json();
-  setRoutines(data);
+    try {
 
-};
+      const res = await fetch(`${API_URL}/api/routines`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
 
-  useEffect(()=>{
+      const data = await res.json();
+
+      if (Array.isArray(data)) {
+        setRoutines(data);
+      } else {
+        console.error("Unexpected response:", data);
+        setRoutines([]);
+      }
+
+    } catch (error) {
+      console.error("Fetch routines error:", error);
+    }
+  };
+
+  useEffect(() => {
     fetchRoutines();
-  },[]);
+  }, []);
 
   return (
 
@@ -35,14 +51,13 @@ const fetchRoutines = async () => {
         Daily Routine
       </h1>
 
-      <AddRoutineForm/>
+      <AddRoutineForm />
 
-      <RoutineTable routines={routines}/>
+      <RoutineTable routines={routines} />
 
     </div>
 
   );
-
 }
 
 export default RoutinePage;

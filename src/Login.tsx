@@ -1,96 +1,107 @@
 import { useState } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_URL } from "./config/api";
 
 type Props = {
   onLogin: () => void;
 };
 
 function Login({ onLogin }: Props) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
 
-const handleLogin = async () => {
-  try {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ username, password })
-    });
+  const [username,setUsername] = useState("");
+  const [password,setPassword] = useState("");
+  const [error,setError] = useState("");
+  const [message,setMessage] = useState("");
+  const [loading,setLoading] = useState(false);
 
-    const data = await res.json();
+  const handleLogin = async () => {
 
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-      onLogin();
-    } else {
-      setError(data.message);
+    setError("");
+    setMessage("");
+    setLoading(true);
+
+    try {
+
+      const res = await fetch(`${API_URL}/api/auth/login`,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({username,password})
+      });
+
+      const data = await res.json();
+
+      if(res.ok){
+
+        localStorage.setItem("token",data.token);
+
+        setMessage("Login successful ✅");
+
+        setTimeout(()=>{
+          onLogin();
+        },1000);
+
+      } else {
+
+        setError(data.message || "Login failed");
+
+      }
+
+    } catch {
+
+      setError("Server not responding");
+
+    } finally {
+
+      setLoading(false);
+
     }
 
-  } catch {
-    setError("Server not responding");
-  }
-};
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
 
-      <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-6 sm:p-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-100">
 
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-semibold text-slate-800">
-            Sign In
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Enter your credentials to continue
-          </p>
-        </div>
+      <div className="bg-white p-8 rounded-xl shadow-md w-96">
 
-        {/* Username */}
-        <div className="mb-4">
-          <label className="block text-sm text-slate-600 mb-1">
-            Username
-          </label>
-          <input
-            type="text"
-            placeholder="Enter username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          />
-        </div>
+        <h2 className="text-xl font-semibold mb-4 text-center">
+          Akieme Member Login
+        </h2>
 
-        {/* Password */}
-        <div className="mb-4">
-          <label className="block text-sm text-slate-600 mb-1">
-            Password
-          </label>
-          <input
-            type="password"
-            placeholder="Enter password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          />
-        </div>
-
-        {/* Error */}
-        {error && (
-          <p className="text-red-500 text-sm mb-4">
-            {error}
-          </p>
+        {message && (
+          <div className="text-green-600 text-sm mb-3">
+            {message}
+          </div>
         )}
 
-        {/* Button */}
+        {error && (
+          <div className="text-red-600 text-sm mb-3">
+            {error}
+          </div>
+        )}
+
+        <input
+          className="w-full border p-2 mb-3 rounded"
+          placeholder="Username"
+          value={username}
+          onChange={(e)=>setUsername(e.target.value)}
+        />
+
+        <input
+          type="password"
+          className="w-full border p-2 mb-4 rounded"
+          placeholder="Password"
+          value={password}
+          onChange={(e)=>setPassword(e.target.value)}
+        />
+
         <button
           onClick={handleLogin}
-          className="w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg text-sm transition"
+          disabled={loading}
+          className="w-full bg-slate-800 text-white py-2 rounded"
         >
-          Login
+          {loading ? "Logging in..": "Login"}
         </button>
 
       </div>

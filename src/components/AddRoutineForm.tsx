@@ -1,23 +1,18 @@
 import { useState } from "react";
 import { API_URL } from "../config/api";
 
-interface RoutineInput {
-  section: string;
-  time: string;
-  activity: string;
-  duration: string;
-  notes: string;
-}
-
 function AddRoutineForm() {
 
-  const [formData, setFormData] = useState<RoutineInput>({
+  const [formData, setFormData] = useState({
     section: "Home",
     time: "",
     activity: "",
     duration: "",
     notes: ""
   });
+
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const timeOptions: string[] = [];
 
@@ -34,26 +29,68 @@ function AddRoutineForm() {
 
   const handleAdd = async () => {
 
-    if (!formData.time || !formData.activity) return;
+    setMessage("");
+    setError("");
 
-    const token = localStorage.getItem("token");
+    if (!formData.time || !formData.activity) {
+      setError("Time and Activity are required");
+      return;
+    }
 
-    await fetch(`${API_URL}/api/routines`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify(formData)
-    });
+    try {
 
-    window.location.reload();
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_URL}/api/routines`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+
+        setMessage("Routine created successfully ✅");
+
+        setFormData({
+          section: "Home",
+          time: "",
+          activity: "",
+          duration: "",
+          notes: ""
+        });
+
+      } else {
+        setError(data.message || "Failed to create routine");
+      }
+
+    } catch {
+      setError("Server not responding");
+    }
 
   };
 
   return (
 
     <div className="bg-slate-50 p-4 sm:p-6 rounded-lg mb-8">
+
+      {/* Success message */}
+      {message && (
+        <div className="mb-4 text-green-600 text-sm">
+          {message}
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 text-red-600 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
 
@@ -75,7 +112,7 @@ function AddRoutineForm() {
           <option value="">Select Time</option>
 
           {timeOptions.map((time)=>(
-            <option key={time}>{time}</option>
+            <option key={time} value={time}>{time}</option>
           ))}
 
         </select>
@@ -116,7 +153,6 @@ function AddRoutineForm() {
       </button>
 
     </div>
-
   );
 }
 
