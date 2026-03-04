@@ -8,21 +8,20 @@ function RoutinePage() {
 
   const [routines,setRoutines] = useState<Routine[]>([]);
 
-  const fetchRoutines = async ()=>{
+const fetchRoutines = async () => {
 
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    const res = await fetch(`${API_URL}/api/routines`,{
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    });
+  const res = await fetch(`${API_URL}/api/routines`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
 
-    const data = await res.json();
+  const data = await res.json();
+  setRoutines(data);
 
-    setRoutines(data);
-
-  };
+};
 
   useEffect(()=>{
     fetchRoutines();
