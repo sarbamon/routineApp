@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 type Props = {
   onLogin: () => void;
 };
@@ -11,19 +13,13 @@ function Login({ onLogin }: Props) {
 
 const handleLogin = async () => {
   try {
-    const res = await fetch(
-      "https://routineapp-backend-production.up.railway.app/api/auth/login",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          username,
-          password
-        })
-      }
-    );
+    const res = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    });
 
     const data = await res.json();
 

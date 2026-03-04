@@ -10,7 +10,7 @@ import AttendanceTrackerPage from "./pages/AttendanceTrackerPage";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
-    localStorage.getItem("isLoggedIn") === "true"
+    !!localStorage.getItem("token")
   );
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -56,7 +56,7 @@ function App() {
 
           <button
             onClick={() => {
-              localStorage.removeItem("isLoggedIn");
+              localStorage.removeItem("token");
               setIsLoggedIn(false);
             }}
             className="bg-red-500 hover:bg-red-600 py-2 rounded-lg mt-10 text-sm"
@@ -85,7 +85,7 @@ function App() {
           <div className="flex-1 flex justify-center">
             <div className="w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
               <Routes>
-                <Route path="/" element={<RoutinePage onAddRoutine={() => {}} />} />
+                <Route path="/" element={<RoutinePage />} />
                 <Route path="/today" element={<TodayPage />} />
                 <Route path="/monthly" element={<MonthlyReportPage />} />
                 <Route path="/money" element={<MoneyTrackerPage />} />
