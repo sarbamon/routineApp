@@ -153,7 +153,7 @@ function TodayPage() {
         <div className="bg-white p-4 rounded-lg shadow">
 
           <h2 className="text-lg font-semibold mb-3">
-            Notes
+            Reminder
           </h2>
 
           <EditorProvider>

@@ -1,6 +1,6 @@
 export interface Routine {
   _id: string;
-  section: string;
+  section: string; 
   time: string;
   activity: string;
   duration: string;
