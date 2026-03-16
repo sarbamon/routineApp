@@ -7,6 +7,7 @@ import TodayPage            from "./pages/TodayPage";
 import MonthlyReportPage    from "./pages/MonthlyReportPage";
 import MoneyTrackerPage     from "./pages/MoneyTrackerPage";
 import AttendanceTrackerPage from "./pages/AttendanceTrackerPage";
+import AdminPage from "./pages/AdminPage";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -29,12 +30,14 @@ function App() {
   }
 
   const NAV_LINKS = [
-    { to: "/",           label: "🏠 Routine"        },
-    { to: "/today",      label: "📋 Today"          },
-    { to: "/monthly",    label: "📅 Monthly Report" },
-    { to: "/money",      label: "💰 Money Tracker"  },
-    { to: "/attendance", label: "📚 Attendance"     },
-  ];
+  { to: "/",           label: "🏠 Routine"        },
+  { to: "/today",      label: "📋 Today"          },
+  { to: "/monthly",    label: "📅 Monthly Report" },
+  { to: "/money",      label: "💰 Money Tracker"  },
+  { to: "/attendance", label: "📚 Attendance"     },
+  // ← only show admin link if logged in as sarbamon
+  ...(username === "sarbamon" ? [{ to: "/admin", label: "👑 Admin" }] : []),
+];
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -176,7 +179,9 @@ function App() {
                 <Route path="/monthly"    element={<MonthlyReportPage />}     />
                 <Route path="/money"      element={<MoneyTrackerPage />}      />
                 <Route path="/attendance" element={<AttendanceTrackerPage />} />
+                <Route path="/admin" element={<AdminPage />} />
                 <Route path="*"           element={<Navigate to="/" />}       />
+                
               </Routes>
             </div>
           </div>
