@@ -6,40 +6,64 @@ interface SocketContextType {
   socket:      Socket | null;
   onlineUsers: string[];
   connected:   boolean;
+  offline:     boolean; // ← new
 }
 
 const SocketContext = createContext<SocketContextType>({
   socket:      null,
   onlineUsers: [],
   connected:   false,
+  offline:     false,
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef                     = useRef<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [connected,   setConnected]   = useState(false);
+  const [offline,     setOffline]     = useState(false); // ← gave up connecting
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    // ✅ Don't connect if no token
     if (!token) return;
 
     const socket = io(API_URL, {
       auth:       { token },
       transports: ["websocket"],
+
+      // ✅ Stop after 5 attempts
       reconnectionAttempts: 5,
-      reconnectionDelay:    2000,
+      reconnectionDelay:    2000,    // wait 2s between attempts
+      reconnectionDelayMax: 5000,    // max 5s wait
+      timeout:              10000,   // 10s connection timeout
     });
 
     socketRef.current = socket;
 
-    socket.on("connect",      () => setConnected(true));
-    socket.on("disconnect",   () => setConnected(false));
-    socket.on("online_users", (users: string[]) => setOnlineUsers(users));
+    socket.on("connect", () => {
+      setConnected(true);
+      setOffline(false);
+    });
+
+    socket.on("disconnect", () => {
+      setConnected(false);
+    });
+
+    socket.on("online_users", (users: string[]) => {
+      setOnlineUsers(users);
+    });
+
+    // ✅ After 5 failed attempts — give up
+    socket.on("reconnect_failed", () => {
+      console.warn("Socket gave up after 5 attempts");
+      setConnected(false);
+      setOffline(true);
+      socket.disconnect(); // stop all further attempts
+    });
 
     socket.on("connect_error", (err) => {
-      console.warn("Socket connection error:", err.message);
+      if (err.message !== "Unauthorized") {
+        console.warn("Socket error:", err.message);
+      }
     });
 
     return () => {
@@ -53,6 +77,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socket:      socketRef.current,
       onlineUsers,
       connected,
+      offline,
     }}>
       {children}
     </SocketContext.Provider>
