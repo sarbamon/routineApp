@@ -35,7 +35,7 @@ export default defineConfig({
           }
         ],
 
-    screenshots: [   // ✅ ADD HERE
+    screenshots: [  
     {
       src: "/screenshot1.png",
       sizes: "1280x720",

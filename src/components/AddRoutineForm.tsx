@@ -1,157 +1,169 @@
 import { useState } from "react";
 import { API_URL } from "../config/api";
 
-function AddRoutineForm() {
+type Props = {
+  onAdd?: () => void;
+};
 
+const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-emerald-500/40 transition-colors";
+
+const SECTIONS  = ["Home", "Hostel - No Class", "Hostel - With Class"];
+const DURATIONS = ["15 min", "30 min", "45 min", "1 Hour", "1.5 Hours", "2 Hours", "3 Hours", "4 Hours"];
+
+function AddRoutineForm({ onAdd }: Props) {
   const [formData, setFormData] = useState({
-    section: "Home",
-    time: "",
+    section:  "Home",
+    time:     "",
     activity: "",
     duration: "",
-    notes: ""
+    notes:    "",
   });
-
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [error,   setError]   = useState("");
+  const [loading, setLoading] = useState(false);
 
+  // Generate time options every 15 min
   const timeOptions: string[] = [];
-
   for (let hour = 0; hour < 24; hour++) {
     for (let minute = 0; minute < 60; minute += 15) {
-
-      const h = hour % 12 === 0 ? 12 : hour % 12;
+      const h    = hour % 12 === 0 ? 12 : hour % 12;
       const ampm = hour < 12 ? "AM" : "PM";
-      const m = minute.toString().padStart(2, "0");
-
+      const m    = minute.toString().padStart(2, "0");
       timeOptions.push(`${h}:${m} ${ampm}`);
     }
   }
 
-  const handleAdd = async () => {
+  const set = (k: string, v: string) => setFormData(f => ({ ...f, [k]: v }));
 
+  const handleAdd = async () => {
     setMessage("");
     setError("");
 
-    if (!formData.time || !formData.activity) {
+    if (!formData.time || !formData.activity.trim()) {
       setError("Time and Activity are required");
       return;
     }
 
+    setLoading(true);
     try {
-
       const token = localStorage.getItem("token");
-
-      const res = await fetch(`${API_URL}/api/routines`, {
+      const res   = await fetch(`${API_URL}/api/routines`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-
-        setMessage("Routine created successfully ✅");
-
-        setFormData({
-          section: "Home",
-          time: "",
-          activity: "",
-          duration: "",
-          notes: ""
-        });
-
+        setMessage("Routine added ✅");
+        setFormData({ section: "Home", time: "", activity: "", duration: "", notes: "" });
+        onAdd?.();
+        setTimeout(() => setMessage(""), 3000);
       } else {
         setError(data.message || "Failed to create routine");
       }
-
     } catch {
       setError("Server not responding");
+    } finally {
+      setLoading(false);
     }
-
   };
 
   return (
-
-    <div className="bg-slate-50 p-4 sm:p-6 rounded-lg mb-8">
-
-      {/* Success message */}
+    <div>
+      {/* Success */}
       {message && (
-        <div className="mb-4 text-green-600 text-sm">
-          {message}
+        <div className="mb-4 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
+          <span className="text-emerald-400 text-xs font-bold">{message}</span>
         </div>
       )}
 
-      {/* Error message */}
+      {/* Error */}
       {error && (
-        <div className="mb-4 text-red-600 text-sm">
-          {error}
+        <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2">
+          <span className="text-red-400 text-xs font-bold">⚠️ {error}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
 
-        <select
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          value={formData.section}
-          onChange={(e)=>setFormData({...formData,section:e.target.value})}
-        >
-          <option>Home</option>
-          <option>Hostel - No Class</option>
-          <option>Hostel - With Class</option>
-        </select>
+        {/* Section */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            Section
+          </label>
+          <select className={inputCls} value={formData.section} onChange={e => set("section", e.target.value)}>
+            {SECTIONS.map(s => <option key={s} className="bg-[#0d0d1a]">{s}</option>)}
+          </select>
+        </div>
 
-        <select
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          value={formData.time}
-          onChange={(e)=>setFormData({...formData,time:e.target.value})}
-        >
-          <option value="">Select Time</option>
+        {/* Time */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            Time
+          </label>
+          <select className={inputCls} value={formData.time} onChange={e => set("time", e.target.value)}>
+            <option value="" className="bg-[#0d0d1a]">Select Time</option>
+            {timeOptions.map(t => <option key={t} value={t} className="bg-[#0d0d1a]">{t}</option>)}
+          </select>
+        </div>
 
-          {timeOptions.map((time)=>(
-            <option key={time} value={time}>{time}</option>
-          ))}
+        {/* Activity */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            Activity
+          </label>
+          <input
+            className={inputCls}
+            placeholder="e.g. Morning Walk"
+            value={formData.activity}
+            onChange={e => set("activity", e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAdd()}
+          />
+        </div>
 
-        </select>
+        {/* Duration */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            Duration
+          </label>
+          <select className={inputCls} value={formData.duration} onChange={e => set("duration", e.target.value)}>
+            <option value="" className="bg-[#0d0d1a]">Select</option>
+            {DURATIONS.map(d => <option key={d} value={d} className="bg-[#0d0d1a]">{d}</option>)}
+          </select>
+        </div>
 
-        <input
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Activity"
-          value={formData.activity}
-          onChange={(e)=>setFormData({...formData,activity:e.target.value})}
-        />
-
-        <select
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          value={formData.duration}
-          onChange={(e)=>setFormData({...formData,duration:e.target.value})}
-        >
-          <option value="">Duration</option>
-          <option>1 Hour</option>
-          <option>2 Hours</option>
-          <option>3 Hours</option>
-          <option>4 Hours</option>
-        </select>
-
-        <input
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Notes"
-          value={formData.notes}
-          onChange={(e)=>setFormData({...formData,notes:e.target.value})}
-        />
+        {/* Notes */}
+        <div>
+          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+            Notes
+          </label>
+          <input
+            className={inputCls}
+            placeholder="Optional notes"
+            value={formData.notes}
+            onChange={e => set("notes", e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAdd()}
+          />
+        </div>
 
       </div>
 
       <button
         onClick={handleAdd}
-        className="mt-5 w-full sm:w-auto bg-slate-800 text-white text-sm px-6 py-2 rounded-lg"
+        disabled={loading}
+        className={`mt-4 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
+          loading
+            ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+            : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.2)]"
+        }`}
       >
-        Add Routine
+        {loading ? "Adding..." : "+ Add Routine"}
       </button>
-
     </div>
   );
 }
