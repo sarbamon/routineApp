@@ -5,11 +5,11 @@ import { useFriends } from "../context/FriendsContext";
 import { encryptMessage, decryptMessage, getSharedSecret } from "../utils/crypto";
 
 interface SearchResult {
-  _id:           string;
-  username:      string;
+  _id:            string;
+  username:       string;
   profilePicture?: string;
-  requestStatus: "none" | "pending" | "incoming" | "accepted" | "rejected";
-  requestId:     string | null;
+  requestStatus:  "none" | "pending" | "incoming" | "accepted" | "rejected";
+  requestId:      string | null;
 }
 
 interface Message {
@@ -29,11 +29,11 @@ interface DecryptedMessage extends Message {
 }
 
 interface ActiveUser {
-  _id:            string;
-  username:       string;
-  canMessage:     boolean;
+  _id:             string;
+  username:        string;
+  canMessage:      boolean;
   profilePicture?: string;
-  bio?:           string;
+  bio?:            string;
 }
 
 const getCurrentUserId = (): string => {
@@ -44,14 +44,16 @@ const getCurrentUserId = (): string => {
   } catch { return ""; }
 };
 
-// Avatar component
+// ── Avatar component ──────────────────────────────────────────────────────────
 const Avatar = ({
-  src, name, size = "sm"
+  src, name, size = "sm",
 }: { src?: string; name: string; size?: "sm" | "md" | "lg" }) => {
   const sizes = { sm: "w-8 h-8 text-xs", md: "w-10 h-10 text-sm", lg: "w-16 h-16 text-xl" };
   return src ? (
-    <img src={src} alt={name}
-      className={`${sizes[size]} rounded-xl object-cover border border-white/10 shrink-0`} />
+    <img
+      src={src} alt={name}
+      className={`${sizes[size]} rounded-xl object-cover border border-white/10 shrink-0`}
+    />
   ) : (
     <div className={`${sizes[size]} rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-black text-emerald-400 uppercase shrink-0`}>
       {name.charAt(0)}
@@ -59,11 +61,12 @@ const Avatar = ({
   );
 };
 
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const token  = localStorage.getItem("token");
-  const myId   = getCurrentUserId();
+  const token = localStorage.getItem("token");
+  const myId  = getCurrentUserId();
 
-  const { socket, onlineUsers }                     = useSocket();
+  const { socket, onlineUsers }     = useSocket();
   const { friends, refetchFriends } = useFriends();
 
   const [activeUser,  setActiveUser]  = useState<ActiveUser | null>(null);
@@ -90,7 +93,7 @@ export default function ChatPage() {
   // ── Fetch unread ──────────────────────────────────────────────────────────
   const fetchUnread = useCallback(async () => {
     try {
-      const res  = await fetch(`${API_URL}/api/chat/unread`, {
+      const res = await fetch(`${API_URL}/api/chat/unread`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUnread(await res.json());
@@ -102,7 +105,7 @@ export default function ChatPage() {
   // ── Load messages ─────────────────────────────────────────────────────────
   const loadMessages = useCallback(async (user: ActiveUser) => {
     try {
-      const res    = await fetch(`${API_URL}/api/chat/messages/${user._id}`, {
+      const res  = await fetch(`${API_URL}/api/chat/messages/${user._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data: Message[] = await res.json();
@@ -124,7 +127,7 @@ export default function ChatPage() {
   // ── Load profile ──────────────────────────────────────────────────────────
   const loadProfile = useCallback(async (userId: string) => {
     try {
-      const res  = await fetch(`${API_URL}/api/chat/profile/${userId}`, {
+      const res = await fetch(`${API_URL}/api/chat/profile/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return await res.json();
@@ -199,7 +202,7 @@ export default function ChatPage() {
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res  = await fetch(`${API_URL}/api/friends/search?q=${encodeURIComponent(val)}`, {
+        const res = await fetch(`${API_URL}/api/friends/search?q=${encodeURIComponent(val)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setSearchResults(await res.json());
@@ -219,11 +222,11 @@ export default function ChatPage() {
     } catch {} finally { setRequesting(null); }
   };
 
-  // ── Send text message ──────────────────────────────────────────────────────
+  // ── Send text ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || !activeUser || !socket || sending) return;
     setSending(true);
-    const secret       = getSharedSecret(myId, activeUser._id);
+    const secret      = getSharedSecret(myId, activeUser._id);
     const { content, iv } = await encryptMessage(input.trim(), secret);
     socket.emit("send_message", { to: activeUser._id, content, iv, type: "text" });
     setInput("");
@@ -231,31 +234,23 @@ export default function ChatPage() {
     socket.emit("typing", { to: activeUser._id, isTyping: false });
   };
 
-  // ── Send image ─────────────────────────────────────────────────────────────
+  // ── Send image ────────────────────────────────────────────────────────────
   const handleImageSend = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeUser || !socket) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be under 5MB");
-      return;
-    }
-
+    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB"); return; }
     const reader = new FileReader();
     reader.onload = () => {
       socket.emit("send_message", {
-        to:        activeUser._id,
-        content:   "",
-        iv:        "",
-        type:      "image",
-        imageData: reader.result as string,
+        to: activeUser._id, content: "", iv: "",
+        type: "image", imageData: reader.result as string,
       });
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  // ── Typing indicator ───────────────────────────────────────────────────────
+  // ── Typing ────────────────────────────────────────────────────────────────
   const handleInputChange = (val: string) => {
     setInput(val);
     if (!activeUser || !socket) return;
@@ -266,13 +261,24 @@ export default function ChatPage() {
     }, 1500);
   };
 
-  // ── Delete message ─────────────────────────────────────────────────────────
+  // ── Delete message ────────────────────────────────────────────────────────
   const deleteMessage = async (id: string) => {
     await fetch(`${API_URL}/api/chat/messages/${id}`, {
       method: "DELETE", headers: { Authorization: `Bearer ${token}` },
     });
     setMessages(prev => prev.filter(m => m._id !== id));
     setLongPress(null);
+  };
+
+  // ── Clear chat ────────────────────────────────────────────────────────────
+  const clearChat = async () => {
+    if (!activeUser) return;
+    if (!confirm(`Clear all messages with @${activeUser.username}? This cannot be undone.`)) return;
+    await fetch(`${API_URL}/api/chat/clear/${activeUser._id}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+    });
+    setMessages([]);
+    setShowInfo(false);
   };
 
   // ── Unfriend ──────────────────────────────────────────────────────────────
@@ -302,7 +308,6 @@ export default function ChatPage() {
   const isOnline  = (userId: string) => onlineUsers.includes(userId);
   const getFromId = (msg: Message) =>
     typeof msg.from === "object" ? msg.from._id : msg.from;
-
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
 
   const requestStatusLabel = (status: string) => {
@@ -457,10 +462,7 @@ export default function ChatPage() {
                 </svg>
               </button>
 
-              <div
-                className="relative cursor-pointer"
-                onClick={() => setShowInfo(s => !s)}
-              >
+              <div className="relative cursor-pointer" onClick={() => setShowInfo(s => !s)}>
                 <Avatar src={activeUser.profilePicture} name={activeUser.username} size="md" />
                 {isOnline(activeUser._id) && (
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0d0d1a]" />
@@ -474,23 +476,19 @@ export default function ChatPage() {
                 </p>
               </div>
 
-              {/* E2E badge */}
               <div className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-1 shrink-0">
                 <span className="text-[9px]">🔒</span>
                 <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wide">E2E</span>
               </div>
 
-              {/* More options */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowInfo(s => !s)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-                  </svg>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowInfo(s => !s)}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+                </svg>
+              </button>
             </div>
 
             {/* ── User info panel ── */}
@@ -509,19 +507,31 @@ export default function ChatPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* ── Action buttons ── */}
+                <div className="flex flex-col gap-2">
+                  {/* Clear chat */}
                   <button
-                    onClick={unfriend}
-                    className="flex-1 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black rounded-xl hover:bg-amber-500/20 transition-colors cursor-pointer"
+                    onClick={clearChat}
+                    className="w-full py-2 bg-slate-500/10 border border-slate-500/20 text-slate-400 text-[10px] font-black rounded-xl hover:bg-slate-500/20 transition-colors cursor-pointer"
                   >
-                    👋 Unfriend
+                    🗑️ Clear Chat
                   </button>
-                  <button
-                    onClick={blockUser}
-                    className="flex-1 py-2 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black rounded-xl hover:bg-red-500/20 transition-colors cursor-pointer"
-                  >
-                    🚫 Block
-                  </button>
+
+                  {/* Unfriend + Block */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={unfriend}
+                      className="flex-1 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black rounded-xl hover:bg-amber-500/20 transition-colors cursor-pointer"
+                    >
+                      👋 Unfriend
+                    </button>
+                    <button
+                      onClick={blockUser}
+                      className="flex-1 py-2 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black rounded-xl hover:bg-red-500/20 transition-colors cursor-pointer"
+                    >
+                      🚫 Block
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -542,7 +552,6 @@ export default function ChatPage() {
                 return (
                   <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2 items-end`}>
 
-                    {/* Avatar for others */}
                     {!isMe && (
                       <Avatar
                         src={typeof msg.from === "object" ? (msg.from as any).profilePicture : ""}
@@ -552,7 +561,6 @@ export default function ChatPage() {
                     )}
 
                     <div className="relative max-w-[70%]">
-                      {/* Delete popup */}
                       {longPress === msg._id && isMe && (
                         <div className="absolute -top-8 right-0 z-10 flex gap-1">
                           <button
@@ -590,7 +598,6 @@ export default function ChatPage() {
                         )}
                       </div>
 
-                      {/* Time + seen */}
                       <div className={`flex items-center gap-1 mt-0.5 ${isMe ? "justify-end" : "justify-start"}`}>
                         <span className="text-[9px] text-slate-600">
                           {new Date(msg.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
@@ -622,8 +629,6 @@ export default function ChatPage() {
 
             {/* ── Input ── */}
             <div className="px-4 py-3 border-t border-white/5 bg-[#0d0d1a] flex gap-2 shrink-0 items-center">
-
-              {/* Image upload */}
               <input
                 ref={imageRef}
                 type="file"
@@ -636,7 +641,8 @@ export default function ChatPage() {
                 className="p-2.5 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer shrink-0"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>
               </button>
