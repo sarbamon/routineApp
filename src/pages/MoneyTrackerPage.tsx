@@ -317,7 +317,7 @@ export default function MoneyTrackerPage() {
         <header className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-[22px] font-black text-white tracking-tight">
-              Akieme <span className="text-emerald-400">One</span>
+              Fin <span className="text-emerald-400">Track</span>
             </h1>
             <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[3px] mt-0.5">
               {new Date().toLocaleString("en-IN", { month: "long", year: "numeric" })}

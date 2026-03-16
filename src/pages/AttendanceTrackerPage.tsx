@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { API_URL } from "../config/api";
 
 const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-emerald-500/40 transition-colors";
-const SUBJECTS_KEY = "akieme_subjects";
 
 interface AttendanceRecord {
   _id: string;
@@ -13,13 +12,10 @@ interface AttendanceRecord {
   leaveReason?: string;
 }
 
-const loadSubjects = (): string[] => {
-  try { return JSON.parse(localStorage.getItem(SUBJECTS_KEY) || "[]"); }
-  catch { return []; }
-};
-
-const saveSubjects = (s: string[]) =>
-  localStorage.setItem(SUBJECTS_KEY, JSON.stringify(s));
+interface SubjectItem {
+  _id: string;
+  name: string;
+}
 
 const TrashIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -33,25 +29,50 @@ const TrashIcon = () => (
 export default function AttendanceTrackerPage() {
   const token = localStorage.getItem("token");
 
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [subjects,   setSubjects]   = useState<string[]>(loadSubjects);
-  const [newSubject, setNewSubject] = useState("");
-  const [showManage, setShowManage] = useState(false);
+  const [attendance,  setAttendance]  = useState<AttendanceRecord[]>([]);
+  const [subjects,    setSubjects]    = useState<SubjectItem[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [newSubject,  setNewSubject]  = useState("");
+  const [addingSubj,  setAddingSubj]  = useState(false);
+  const [showManage,  setShowManage]  = useState(false);
+  const [msg,         setMsg]         = useState({ text: "", type: "" });
 
   const today = new Date().toISOString().split("T")[0];
 
   const [form, setForm] = useState({
     date:        today,
     status:      "present" as "present" | "absent" | "leave",
-    subject:     loadSubjects()[0] || "",
+    subject:     "",
     hours:       "1",
     leaveReason: "",
   });
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  const showMsg = (text: string, type: "success" | "error") => {
+    setMsg({ text, type });
+    setTimeout(() => setMsg({ text: "", type: "" }), 3000);
+  };
+
+  // ── Fetch subjects ────────────────────────────────────────────────────────
+  const fetchSubjects = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API_URL}/api/attendance/subjects`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setSubjects(Array.isArray(data) ? data : []);
+      // Auto-select first subject
+      if (data.length > 0 && !form.subject) {
+        setForm(f => ({ ...f, subject: data[0].name }));
+      }
+    } catch (err) {
+      console.error("Fetch subjects error:", err);
+    }
+  }, [token]);
+
+  // ── Fetch attendance ──────────────────────────────────────────────────────
   const fetchAttendance = useCallback(async () => {
     try {
       const res  = await fetch(`${API_URL}/api/attendance`, {
@@ -61,38 +82,72 @@ export default function AttendanceTrackerPage() {
       const data = await res.json();
       setAttendance(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch attendance", err);
+      console.error("Fetch attendance error:", err);
       setAttendance([]);
-    } finally {
-      setLoading(false);
     }
   }, [token]);
 
-  useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
+  // ── Load both on mount ────────────────────────────────────────────────────
+  useEffect(() => {
+    Promise.all([fetchSubjects(), fetchAttendance()])
+      .finally(() => setLoading(false));
+  }, [fetchSubjects, fetchAttendance]);
 
-  // ── Subjects ──────────────────────────────────────────────────────────────
-  const addSubject = () => {
+  // ── Add subject ───────────────────────────────────────────────────────────
+  const addSubject = async () => {
     const trimmed = newSubject.trim();
-    if (!trimmed || subjects.includes(trimmed)) return;
-    const updated = [...subjects, trimmed];
-    setSubjects(updated);
-    saveSubjects(updated);
-    setNewSubject("");
-    setForm(f => ({ ...f, subject: trimmed }));
-  };
-
-  const deleteSubject = (name: string) => {
-    const updated = subjects.filter(s => s !== name);
-    setSubjects(updated);
-    saveSubjects(updated);
-    if (form.subject === name) setForm(f => ({ ...f, subject: updated[0] || "" }));
-  };
-
-  // ── Add record ────────────────────────────────────────────────────────────
-  const addRecord = async () => {
-    if (!form.subject) return;
+    if (!trimmed) return;
+    setAddingSubj(true);
     try {
-      await fetch(`${API_URL}/api/attendance`, {
+      const res  = await fetch(`${API_URL}/api/attendance/subjects`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewSubject("");
+        await fetchSubjects();
+        setForm(f => ({ ...f, subject: trimmed }));
+        showMsg(`✅ "${trimmed}" added`, "success");
+      } else {
+        showMsg(data.message || "Failed to add subject", "error");
+      }
+    } catch {
+      showMsg("Server error", "error");
+    } finally {
+      setAddingSubj(false);
+    }
+  };
+
+  // ── Delete subject ────────────────────────────────────────────────────────
+  const deleteSubject = async (id: string, name: string) => {
+    try {
+      await fetch(`${API_URL}/api/attendance/subjects/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await fetchSubjects();
+      if (form.subject === name) {
+        setForm(f => ({ ...f, subject: subjects[0]?.name || "" }));
+      }
+      showMsg(`🗑️ "${name}" removed`, "success");
+    } catch {
+      showMsg("Server error", "error");
+    }
+  };
+
+  // ── Add attendance record ─────────────────────────────────────────────────
+  const addRecord = async () => {
+    if (!form.subject) {
+      showMsg("Please select a subject", "error");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/attendance`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,10 +161,13 @@ export default function AttendanceTrackerPage() {
           leaveReason: form.leaveReason,
         }),
       });
-      setForm(f => ({ ...f, leaveReason: "", hours: "1" }));
-      fetchAttendance();
-    } catch (err) {
-      console.error("Failed to add record", err);
+      if (res.ok) {
+        setForm(f => ({ ...f, leaveReason: "", hours: "1" }));
+        await fetchAttendance();
+        showMsg("✅ Record added", "success");
+      }
+    } catch {
+      showMsg("Server error", "error");
     }
   };
 
@@ -120,9 +178,9 @@ export default function AttendanceTrackerPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchAttendance();
-    } catch (err) {
-      console.error("Failed to delete record", err);
+      await fetchAttendance();
+    } catch {
+      showMsg("Server error", "error");
     }
   };
 
@@ -166,7 +224,7 @@ export default function AttendanceTrackerPage() {
     </div>
   );
 
-  // ── First time setup ──────────────────────────────────────────────────────
+  // ── First time — no subjects ──────────────────────────────────────────────
   if (subjects.length === 0 && !showManage) return (
     <div className="p-4 md:p-6 min-h-screen bg-[#04040a] text-slate-200 flex flex-col items-center justify-center">
       <div className="w-full max-w-sm text-center">
@@ -179,6 +237,15 @@ export default function AttendanceTrackerPage() {
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">
             Add your first subject
           </p>
+
+          {msg.text && (
+            <div className={`mb-3 px-3 py-2 rounded-xl text-xs font-bold ${
+              msg.type === "success"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                : "bg-red-500/10 text-red-400 border border-red-500/20"
+            }`}>{msg.text}</div>
+          )}
+
           <div className="flex gap-2">
             <input
               className={inputCls}
@@ -190,10 +257,10 @@ export default function AttendanceTrackerPage() {
             />
             <button
               onClick={addSubject}
-              disabled={!newSubject.trim()}
+              disabled={!newSubject.trim() || addingSubj}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-black rounded-xl cursor-pointer transition-colors shrink-0"
             >
-              Add
+              {addingSubj ? "..." : "Add"}
             </button>
           </div>
         </div>
@@ -205,7 +272,7 @@ export default function AttendanceTrackerPage() {
     <div className="p-4 md:p-6 min-h-screen bg-[#04040a] text-slate-200">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-black text-white">Attendance</h1>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
@@ -214,11 +281,26 @@ export default function AttendanceTrackerPage() {
         </div>
         <button
           onClick={() => setShowManage(s => !s)}
-          className="px-3 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl text-[10px] font-black text-slate-400 uppercase tracking-wide cursor-pointer transition-colors"
+          className={`px-3 py-2 border rounded-xl text-[10px] font-black uppercase tracking-wide cursor-pointer transition-colors ${
+            showManage
+              ? "bg-violet-500/10 border-violet-500/20 text-violet-400"
+              : "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-slate-400"
+          }`}
         >
           ⚙️ Subjects
         </button>
       </div>
+
+      {/* ── Message banner ── */}
+      {msg.text && (
+        <div className={`mb-4 px-4 py-3 rounded-xl border text-xs font-bold ${
+          msg.type === "success"
+            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+            : "bg-red-500/10 border-red-500/20 text-red-400"
+        }`}>
+          {msg.text}
+        </div>
+      )}
 
       {/* ── Manage subjects ── */}
       {showManage && (
@@ -226,6 +308,8 @@ export default function AttendanceTrackerPage() {
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">
             Manage Subjects
           </p>
+
+          {/* Add new */}
           <div className="flex gap-2 mb-4">
             <input
               className={inputCls}
@@ -236,38 +320,44 @@ export default function AttendanceTrackerPage() {
             />
             <button
               onClick={addSubject}
-              disabled={!newSubject.trim() || subjects.includes(newSubject.trim())}
+              disabled={!newSubject.trim() || addingSubj}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-black rounded-xl cursor-pointer transition-colors shrink-0"
             >
-              Add
+              {addingSubj ? "..." : "Add"}
             </button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {subjects.map(s => (
-              <div
-                key={s}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-xl"
-              >
-                <span className="text-xs font-semibold text-slate-300">{s}</span>
-                <button
-                  onClick={() => deleteSubject(s)}
-                  className="text-slate-600 hover:text-red-400 transition-colors cursor-pointer"
+
+          {/* Subject chips */}
+          {subjects.length === 0 ? (
+            <p className="text-xs text-slate-600">No subjects yet</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {subjects.map(s => (
+                <div
+                  key={s._id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-xl"
                 >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/>
-                    <line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
+                  <span className="text-xs font-semibold text-slate-300">{s.name}</span>
+                  <button
+                    onClick={() => deleteSubject(s._id, s.name)}
+                    className="text-slate-600 hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-6">
         {[
-          { label: "Attendance",  value: `${stats.pct}%`,  color: "text-emerald-400" },
+          { label: "Attendance",  value: `${stats.pct}%`,  color: stats.pct >= 75 ? "text-emerald-400" : "text-red-400" },
           { label: "Present",     value: stats.present,     color: "text-emerald-400" },
           { label: "Absent",      value: stats.absent,      color: "text-red-400"     },
           { label: "Total Hours", value: `${stats.hours}h`, color: "text-violet-400"  },
@@ -289,31 +379,34 @@ export default function AttendanceTrackerPage() {
 
           <div className="mb-3">
             <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Date</label>
-            <input
-              type="date"
-              className={inputCls}
-              value={form.date}
-              onChange={e => set("date", e.target.value)}
-            />
+            <input type="date" className={inputCls} value={form.date} onChange={e => set("date", e.target.value)} />
           </div>
 
           <div className="mb-3">
-            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Subject</label>
-            <div className="flex flex-wrap gap-2">
-              {subjects.map(s => (
-                <button
-                  key={s}
-                  onClick={() => set("subject", s)}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer border transition-all ${
-                    form.subject === s
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                      : "bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+              Subject
+            </label>
+            {subjects.length === 0 ? (
+              <div className="px-3 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400 font-semibold">
+                Add subjects using ⚙️ Subjects button above
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {subjects.map(s => (
+                  <button
+                    key={s._id}
+                    onClick={() => set("subject", s.name)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer border transition-all ${
+                      form.subject === s.name
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : "bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mb-3">
@@ -338,9 +431,7 @@ export default function AttendanceTrackerPage() {
           <div className="mb-3">
             <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Hours</label>
             <input
-              type="number"
-              min="0"
-              max="12"
+              type="number" min="0" max="12"
               className={inputCls}
               value={form.hours}
               onChange={e => set("hours", e.target.value)}
@@ -372,7 +463,9 @@ export default function AttendanceTrackerPage() {
 
         {/* ── Subject Stats ── */}
         <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
-          <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Subject-wise</h2>
+          <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+            Subject-wise
+          </h2>
           {subjectStats.length === 0 ? (
             <div className="text-center py-10">
               <div className="text-2xl mb-2 opacity-30">📚</div>
@@ -397,7 +490,9 @@ export default function AttendanceTrackerPage() {
                       style={{ width: `${s.pct}%` }}
                     />
                   </div>
-                  <p className="text-[9px] text-slate-600 mt-0.5">{s.present}/{s.total} classes</p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">
+                    {s.present}/{s.total} classes
+                  </p>
                 </div>
               ))}
             </div>
@@ -408,7 +503,9 @@ export default function AttendanceTrackerPage() {
 
       {/* ── Records List ── */}
       <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
-        <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">All Records</h2>
+        <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+          All Records
+        </h2>
         {attendance.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-2xl mb-2 opacity-30">📅</div>
@@ -432,7 +529,6 @@ export default function AttendanceTrackerPage() {
                     </p>
                   </div>
                 </div>
-                {/* ✅ Always visible — no hover hide on mobile */}
                 <button
                   onClick={() => deleteRecord(r._id)}
                   className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer shrink-0"
