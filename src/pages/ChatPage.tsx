@@ -102,7 +102,7 @@ export default function ChatPage() {
 
   useEffect(() => { fetchUnread(); }, [fetchUnread]);
 
-  // ── Load messages ─────────────────────────────────────────────────────────
+  // ── Load messages 
   const loadMessages = useCallback(async (user: ActiveUser) => {
     try {
       const res  = await fetch(`${API_URL}/api/chat/messages/${user._id}`, {
@@ -124,7 +124,7 @@ export default function ChatPage() {
     } catch {}
   }, [token, myId, socket]);
 
-  // ── Load profile ──────────────────────────────────────────────────────────
+  // ── Load profile 
   const loadProfile = useCallback(async (userId: string) => {
     try {
       const res = await fetch(`${API_URL}/api/chat/profile/${userId}`, {
@@ -194,7 +194,7 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, otherTyping]);
 
-  // ── Search ────────────────────────────────────────────────────────────────
+  // ── Search
   const handleSearch = (val: string) => {
     setSearchQ(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -210,18 +210,22 @@ export default function ChatPage() {
     }, 400);
   };
 
-  const sendRequest = async (userId: string) => {
-    setRequesting(userId);
-    try {
-      await fetch(`${API_URL}/api/friends/request/${userId}`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` },
-      });
-      setSearchResults(prev => prev.map(u =>
-        u._id === userId ? { ...u, requestStatus: "pending" as const } : u
-      ));
-    } catch {} finally { setRequesting(null); }
-  };
-
+const sendRequest = async (userId: string) => {
+  setRequesting(userId);
+  try {
+    await fetch(`${API_URL}/api/friends/request/${userId}`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}` },
+    });
+    // ✅ Notify recipient via socket
+    socket?.emit("friend_request_sent", {
+      to:           userId,
+      fromUsername: localStorage.getItem("username"),
+    });
+    setSearchResults(prev => prev.map(u =>
+      u._id === userId ? { ...u, requestStatus: "pending" as const } : u
+    ));
+  } catch {} finally { setRequesting(null); }
+};
   // ── Send text ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || !activeUser || !socket || sending) return;

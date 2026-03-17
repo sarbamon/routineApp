@@ -2,9 +2,10 @@ import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import { useState } from "react";
 import Login        from "./Login";
 import { PagesProvider, usePagesContext, ALL_PAGES } from "./context/PagesContext";
-import { SocketProvider }  from "./context/SocketContext";
-import { FriendsProvider } from "./context/FriendsContext";
-import NotificationBell    from "./components/NotificationBell";
+import { SocketProvider }        from "./context/SocketContext";
+import { FriendsProvider }       from "./context/FriendsContext";
+import { NotificationProvider }  from "./context/NotificationContext";
+import NotificationBell          from "./components/NotificationBell";
 
 import OnboardingPage        from "./pages/OnboardingPage";
 import HomePage              from "./pages/HomePage";
@@ -41,8 +42,8 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         to:    p.id === "routine" ? "/" : `/${p.id}`,
         label: `${p.emoji} ${p.label}`,
       })),
-    { to: "/profile",  label: "👤 Profile"  },
-    { to: "/settings", label: "⚙️ Settings" },
+    { to: "/profile",       label: "👤 Profile"       },
+    { to: "/settings",      label: "⚙️ Settings"      },
     ...(username === ADMIN ? [{ to: "/admin", label: "👑 Admin" }] : []),
   ];
 
@@ -180,10 +181,10 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         {/* ── Routes ── */}
         <div className="flex-1 flex flex-col">
           <Routes>
-            <Route path="/home"    element={<HomePage />}    />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/profile"  element={<ProfilePage />}  />
-            <Route path="/admin"    element={<AdminPage />}    />
+            <Route path="/home"          element={<HomePage />}          />
+            <Route path="/settings"      element={<SettingsPage />}      />
+            <Route path="/profile"       element={<ProfilePage />}       />
+            <Route path="/admin"         element={<AdminPage />}         />
 
             {/* Enabled pages only */}
             {enabledPages.includes("routine")    && <Route path="/"           element={<RoutinePage />}           />}
@@ -228,9 +229,11 @@ function App() {
     <PagesProvider>
       <SocketProvider>
         <FriendsProvider>
-          <BrowserRouter>
-            <InnerApp username={username} onLogout={handleLogout} />
-          </BrowserRouter>
+          <NotificationProvider>
+            <BrowserRouter>
+              <InnerApp username={username} onLogout={handleLogout} />
+            </BrowserRouter>
+          </NotificationProvider>
         </FriendsProvider>
       </SocketProvider>
     </PagesProvider>

@@ -6,7 +6,7 @@ interface SocketContextType {
   socket:      Socket | null;
   onlineUsers: string[];
   connected:   boolean;
-  offline:     boolean; // ← new
+  offline:     boolean; 
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -20,7 +20,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef                     = useRef<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [connected,   setConnected]   = useState(false);
-  const [offline,     setOffline]     = useState(false); // ← gave up connecting
+  const [offline,     setOffline]     = useState(false); 
 
   useEffect(() => {
     const token = localStorage.getItem("token");
