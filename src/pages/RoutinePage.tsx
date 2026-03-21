@@ -7,10 +7,10 @@ import { Routine } from "../types/Routine";
 const SECTIONS = ["Home", "Hostel - No Class", "Hostel - With Class"];
 
 function RoutinePage() {
-  const [routines,         setRoutines]         = useState<Routine[]>([]);
-  const [selectedSection,  setSelectedSection]  = useState("Home");
-  const [loading,          setLoading]          = useState(true);
-  const [showModal,        setShowModal]        = useState(false);
+  const [routines,        setRoutines]        = useState<Routine[]>([]);
+  const [selectedSection, setSelectedSection] = useState("Home");
+  const [loading,         setLoading]         = useState(true);
+  const [showModal,       setShowModal]       = useState(false);
 
   const fetchRoutines = async () => {
     const token = localStorage.getItem("token");
@@ -37,24 +37,11 @@ function RoutinePage() {
     <div className="p-4 md:p-6 min-h-screen bg-[#04040a] text-slate-200">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-black text-white">Daily Routine</h1>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
-            Manage your daily schedule
-          </p>
-        </div>
-
-        {/* ── + Button ── */}
-        <button
-          onClick={() => setShowModal(true)}
-          className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-[0_0_16px_rgba(16,185,129,0.3)] transition-all cursor-pointer active:scale-95"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-black text-white">Daily Routine</h1>
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
+          Manage your daily schedule
+        </p>
       </div>
 
       {/* ── Section tabs ── */}
@@ -107,6 +94,17 @@ function RoutinePage() {
         )}
       </div>
 
+      {/* ── Floating + button ── */}
+      <button
+        onClick={() => setShowModal(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_32px_rgba(16,185,129,0.4)] transition-all cursor-pointer active:scale-95 z-30"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+
       {/* ── Modal ── */}
       {showModal && (
         <>
@@ -148,6 +146,7 @@ function RoutinePage() {
                   }}
                 />
               </div>
+
             </div>
           </div>
         </>
