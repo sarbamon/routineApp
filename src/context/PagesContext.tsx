@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { API_URL } from "../config/api";
 
 export const ALL_PAGES = [
-  { id: "routine",    label: "Routine",        emoji: "🏠", desc: "Daily schedule & habits"     },
+  { id: "routine",    label: "Routine",        emoji: "👩🏻‍💻", desc: "Daily schedule & habits"     },
   { id: "today",      label: "Today",          emoji: "📋", desc: "Tasks & reminders"           },
   { id: "money",      label: "Money Tracker",  emoji: "💰", desc: "Income, expenses & goals"    },
   { id: "attendance", label: "Attendance",     emoji: "📚", desc: "Track classes & subjects"    },
