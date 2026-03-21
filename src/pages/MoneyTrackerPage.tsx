@@ -53,7 +53,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-emerald-500/40 transition-colors";
 
-// ── Add Modal ─────────────────────────────────────────────────────────────────
+// ── Add Model ─────────────────────────────────────────────────────────────────
 function AddModal({ onClose, onAdd, defaultType }: {
   onClose: () => void;
   onAdd: (type: string, data: Partial<MoneyItem>) => Promise<void>;
