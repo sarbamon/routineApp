@@ -7,7 +7,7 @@ Akieme One is a high-performance personal dashboard designed to help users track
 
 ## Key Features
 
-### 📅 Daily Routine & Task Management
+### Daily Routine & Task Management
 * **Dynamic Home Dashboard:** Intelligent greetings and daily intentions based on the time of day.
 * **Progressive To-Do List:** Real-time task tracking with visual progress bars.
 * **Routine Automation:** Quick access to structured daily habits.
@@ -28,7 +28,7 @@ Akieme One is a high-performance personal dashboard designed to help users track
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Frontend | Backend | Database | Real-time |
 | :--- | :--- | :--- | :--- |
