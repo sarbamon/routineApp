@@ -1,50 +1,50 @@
-# React + TypeScript + Vite
+# Akieme One
+**A Modern Personal Growth & Routine Management System**
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Akieme One is a high-performance personal dashboard designed to help users track their daily routines, finances, attendance, and goals. Built with the MERN stack, it features a sleek dark UI, real-time notifications, and end-to-end encrypted messaging.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Key Features
 
-## Expanding the ESLint configuration
+### 📅 Daily Routine & Task Management
+* **Dynamic Home Dashboard:** Intelligent greetings and daily intentions based on the time of day.
+* **Progressive To-Do List:** Real-time task tracking with visual progress bars.
+* **Routine Automation:** Quick access to structured daily habits.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+### Financial Intelligence
+* **Income & Expense Tracker:** Categorized financial logging with monthly summaries.
+* **Goal Setting:** Dedicated "Savings Goals" with target tracking and progress visualization.
+* **Monthly Analytics:** Automatic calculation of net balance and category breakdowns.
 
-- Configure the top-level `parserOptions` property like this:
+### Academic & Consistency Tracking
+* **Attendance System:** A GitHub-style heat map for tracking consistency (Present/Absent).
+* **Automatic Percentages:** Real-time calculation of attendance rates with visual alerts for falling below 75%.
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+### Secure Communication
+* **E2E Encrypted Chat:** Private messaging secured with AES-256-GCM encryption.
+* **Socket.io Integration:** Real-time "Typing" indicators and "Seen" receipts.
+* **Friend System:** Search by username, send requests, and manage connections.
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+---
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+## 🛠️ Tech Stack
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+| Frontend | Backend | Database | Real-time |
+| :--- | :--- | :--- | :--- |
+| React 18 | Node.js | MongoDB | Socket.io |
+| TypeScript | Express | Mongoose | Node-Cron |
+| Tailwind CSS | JWT Auth | | |
+
+---
+
+## Getting Started
+
+### Prerequisites
+* Node.js (v16+)
+* MongoDB (Atlas or Local)
+
+### 1. Clone the repository
+```bash
+git clone [https://github.com/yourusername/akieme-one.git](https://github.com/yourusername/akieme-one.git)
+cd akieme-one
