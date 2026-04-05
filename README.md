@@ -46,5 +46,5 @@ Akieme One is a high-performance personal dashboard designed to help users track
 
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/yourusername/akieme-one.git](https://github.com/yourusername/akieme-one.git)
-cd akieme-one
+git clone https://github.com/sarbamon/routineApp
+cd routineApp
