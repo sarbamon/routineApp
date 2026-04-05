@@ -28,6 +28,13 @@ interface NotificationStats {
   }>;
 }
 
+interface Analytics {
+  completionRate: number;
+  totalTasks: number;
+  completedTasks: number;
+  topKeywords: Record<string, number>;
+}
+
 const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-emerald-500/40 transition-colors placeholder:text-slate-600";
 
 export default function AdminPage() {
@@ -49,6 +56,10 @@ export default function AdminPage() {
   // Notification stats
   const [stats, setStats] = useState<NotificationStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  // Analytics
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   const showMsg = (text: string, type: "success" | "error") => {
     setMsg({ text, type });
@@ -72,16 +83,38 @@ export default function AdminPage() {
     }
   }, [token]);
 
+  // ── Fetch analytics ─────────────────────────────────────────────────────────
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAnalytics(data);
+      } else {
+        throw new Error("Failed to fetch analytics");
+      }
+    } catch (err) {
+      console.error("Analytics error:", err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [token]);
+
   // ── Fetch users ─────────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     try {
       const res  = await fetch(`${API_URL}/api/auth/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Fetch users error:", err);
+      showMsg("Failed to load users", "error");
     } finally {
       setLoading(false);
     }
@@ -90,7 +123,8 @@ export default function AdminPage() {
   useEffect(() => { 
     fetchUsers(); 
     fetchStats();
-  }, [fetchUsers, fetchStats]);
+    fetchAnalytics();
+  }, [fetchUsers, fetchStats, fetchAnalytics]);
 
   // ── Create account ───────────────────────────────────────────────────────────
   const createAccount = async () => {
@@ -245,7 +279,7 @@ export default function AdminPage() {
                 Total Notifications
               </p>
               <p className="text-2xl font-black text-white">
-                {statsLoading ? "..." : stats?.totalNotifications || 0}
+                {statsLoading ? "..." : stats?.totalNotifications ?? 0}
               </p>
             </div>
           </div>
@@ -262,7 +296,7 @@ export default function AdminPage() {
                 Total Unread
               </p>
               <p className="text-2xl font-black text-white">
-                {statsLoading ? "..." : stats?.totalUnread || 0}
+                {statsLoading ? "..." : stats?.totalUnread ?? 0}
               </p>
             </div>
           </div>
@@ -284,6 +318,83 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Analytics Dashboard ── */}
+      <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-5 mb-4">
+        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">
+          🧠 User Behavior Analytics
+        </p>
+
+        {analyticsLoading ? (
+          <div className="text-center py-8">
+            <p className="text-xs text-slate-600">Loading analytics...</p>
+          </div>
+        ) : analytics ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Completion Rate */}
+              <div className="p-4 bg-white/[0.02] border border-white/[0.04] rounded-xl">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                  Completion Rate
+                </p>
+                <p className="text-2xl font-black text-white">
+                  {analytics.completionRate != null
+                    ? `${analytics.completionRate.toFixed(1)}%`
+                    : "N/A"}
+                </p>
+              </div>
+
+              {/* Total Tasks */}
+              <div className="p-4 bg-white/[0.02] border border-white/[0.04] rounded-xl">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                  Total Tasks
+                </p>
+                <p className="text-2xl font-black text-white">
+                  {analytics.totalTasks ?? 0}
+                </p>
+              </div>
+
+              {/* Completed Tasks */}
+              <div className="p-4 bg-white/[0.02] border border-white/[0.04] rounded-xl">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                  Completed
+                </p>
+                <p className="text-2xl font-black text-white">
+                  {analytics.completedTasks ?? 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Top Keywords */}
+            <div>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                🔥 Top Keywords
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {analytics.topKeywords && Object.keys(analytics.topKeywords).length > 0 ? (
+                  Object.entries(analytics.topKeywords)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([word, count]) => (
+                      <span
+                        key={word}
+                        className="px-3 py-1.5 bg-purple-600/20 border border-purple-600/30 rounded-lg text-xs font-bold text-purple-300"
+                      >
+                        {word} <span className="text-purple-400">({count})</span>
+                      </span>
+                    ))
+                ) : (
+                  <p className="text-xs text-slate-600">No keywords data available</p>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-xs text-slate-600">No analytics data available</p>
+          </div>
+        )}
       </div>
 
       {/* ── Recent Broadcasts ── */}

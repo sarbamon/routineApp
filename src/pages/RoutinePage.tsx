@@ -97,7 +97,7 @@ function RoutinePage() {
       {/* ── Floating + button ── */}
       <button
         onClick={() => setShowModal(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_32px_rgba(16,185,129,0.4)] transition-all cursor-pointer active:scale-95 z-40"
+        className="fixed bottom-24 right-6 w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-[0_8px_32px_rgba(16,185,129,0.4)] transition-all cursor-pointer active:scale-95 z-40"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <line x1="12" y1="5" x2="12" y2="19"/>

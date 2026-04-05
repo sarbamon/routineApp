@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Login        from "./Login";
 import { PagesProvider, usePagesContext, ALL_PAGES } from "./context/PagesContext";
 import { SocketProvider }        from "./context/SocketContext";
 import { FriendsProvider }       from "./context/FriendsContext";
 import { NotificationProvider }  from "./context/NotificationContext";
 import NotificationBell          from "./components/NotificationBell";
+import { unlockAudio }           from "./utils/sound";
 
 import OnboardingPage        from "./pages/OnboardingPage";
 import HomePage              from "./pages/HomePage";
@@ -18,6 +19,7 @@ import SettingsPage          from "./pages/SettingsPage";
 import AdminPage             from "./pages/AdminPage";
 import ChatPage              from "./pages/ChatPage";
 import ProfilePage           from "./pages/ProfilePage";
+import BottomNav             from "./components/BottomNav";;
 
 const ADMIN = "sarbamon";
 
@@ -128,7 +130,7 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
       </div>
 
       {/* ── Main area ── */}
-      <div className="min-h-screen md:ml-64 flex flex-col bg-[#04040a]">
+      <div className="h-screen md:ml-64 flex flex-col bg-[#04040a] overflow-hidden">
 
         {/* ── Mobile top bar ── */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0d0d1a] border-b border-white/5 shrink-0">
@@ -179,21 +181,19 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         </div>
 
         {/* ── Routes ── */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-[calc(100vh-80px)] pb-[110px] overflow-y-auto">
           <Routes>
             <Route path="/home"          element={<HomePage />}          />
             <Route path="/settings"      element={<SettingsPage />}      />
             <Route path="/profile"       element={<ProfilePage />}       />
             <Route path="/admin"         element={<AdminPage />}         />
 
-            {/* Enabled pages only */}
             {enabledPages.includes("routine")    && <Route path="/"           element={<RoutinePage />}           />}
             {enabledPages.includes("today")      && <Route path="/today"      element={<TodayPage />}             />}
             {enabledPages.includes("money")      && <Route path="/money"      element={<MoneyTrackerPage />}      />}
             {enabledPages.includes("attendance") && <Route path="/attendance" element={<AttendanceTrackerPage />} />}
             {enabledPages.includes("monthly")    && <Route path="/monthly"    element={<MonthlyReportPage />}     />}
-            {enabledPages.includes("chat")       && <Route path="/chat"       element={<ChatPage />}              />}
-
+            {enabledPages.includes("chat") && <Route path="/chat" element={<ChatPage />} />}
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </div>
@@ -206,6 +206,25 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
   const [username,   setUsername]   = useState(localStorage.getItem("username") || "");
+
+  // ── Unlock audio on first user interaction ────────────────────────────────
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudio();
+      window.removeEventListener("click",      unlock);
+      window.removeEventListener("keydown",    unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click",      unlock);
+    window.addEventListener("keydown",    unlock);
+    window.addEventListener("touchstart", unlock);
+
+    return () => {
+      window.removeEventListener("click",      unlock);
+      window.removeEventListener("keydown",    unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -232,6 +251,7 @@ function App() {
           <NotificationProvider>
             <BrowserRouter>
               <InnerApp username={username} onLogout={handleLogout} />
+              <BottomNav />
             </BrowserRouter>
           </NotificationProvider>
         </FriendsProvider>

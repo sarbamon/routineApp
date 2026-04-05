@@ -25,21 +25,28 @@ interface NotifContextType {
   markAllRead:    () => Promise<void>;
   deleteNotif:    (id: string) => Promise<void>;
   clearAll:       () => Promise<void>;
+
+  // 🔥 NEW
+  selectedNotification: NotifItem | null;
+  openNotification: (notif: NotifItem) => void;
+  closeNotification: () => void;
 }
 
 const NotifContext = createContext<NotifContextType | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const token           = localStorage.getItem("token");
-  const { socket }      = useSocket();
+  const token      = localStorage.getItem("token");
+  const { socket } = useSocket();
+
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
+  const [selectedNotification, setSelectedNotification] = useState<NotifItem | null>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // ── Request OS notification permission on mount ───────────────────────────
+  // ── Permission ─────────────────
   useEffect(() => { requestPermission(); }, []);
 
-  // ── Fetch notifications ───────────────────────────────────────────────────
+  // ── Fetch ──────────────────────
   const fetchNotifs = useCallback(async () => {
     if (!token) return;
     try {
@@ -53,71 +60,97 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { fetchNotifs(); }, [fetchNotifs]);
 
-  // ── Update badge whenever unread count changes ────────────────────────────
+  // ── Badge ──────────────────────
   useEffect(() => { updateBadge(unreadCount); }, [unreadCount]);
 
-  // ── Listen for real-time notifications ───────────────────────────────────
+  // ── Socket ─────────────────────
   useEffect(() => {
     if (!socket) return;
 
     socket.on("new_notification", (notif: NotifItem) => {
       setNotifications(prev => [notif, ...prev]);
 
-      // Play sound based on type
-      if (notif.type === "message")        playMessageSound();
+      if (notif.type === "message") playMessageSound();
       if (notif.type === "friend_request") playRequestSound();
-      if (notif.type === "todo_reminder")  playTodoSound();
+      if (notif.type === "todo_reminder") playTodoSound();
       if (notif.type === "friend_accepted") playRequestSound();
 
-      // OS notification
       sendOSNotification(notif.title, notif.body);
     });
 
     return () => { socket.off("new_notification"); };
   }, [socket]);
 
-  // ── Mark one read ─────────────────────────────────────────────────────────
+  // ── Mark one read ──────────────
   const markRead = async (id: string) => {
     setNotifications(prev =>
       prev.map(n => n._id === id ? { ...n, read: true } : n)
     );
+
     await fetch(`${API_URL}/api/notifications/${id}/read`, {
-      method:  "PATCH",
+      method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
-  // ── Mark all read ─────────────────────────────────────────────────────────
+  // ── Mark all ───────────────────
   const markAllRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
     await fetch(`${API_URL}/api/notifications/read-all`, {
-      method:  "PATCH",
+      method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
-  // ── Delete one ────────────────────────────────────────────────────────────
+  // ── Delete ─────────────────────
   const deleteNotif = async (id: string) => {
     setNotifications(prev => prev.filter(n => n._id !== id));
+
     await fetch(`${API_URL}/api/notifications/${id}`, {
-      method:  "DELETE",
+      method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
-  // ── Clear all ─────────────────────────────────────────────────────────────
+  // ── Clear ──────────────────────
   const clearAll = async () => {
     setNotifications([]);
     await fetch(`${API_URL}/api/notifications`, {
-      method:  "DELETE",
+      method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
+  };
+
+  // ── 🔥 OPEN NOTIFICATION ───────
+  const openNotification = (notif: NotifItem) => {
+    setSelectedNotification(notif);
+
+    // auto mark as read
+    if (!notif.read) {
+      markRead(notif._id);
+    }
+  };
+
+  // ── 🔥 CLOSE ───────────────────
+  const closeNotification = () => {
+    setSelectedNotification(null);
   };
 
   return (
     <NotifContext.Provider value={{
-      notifications, unreadCount,
-      fetchNotifs, markRead, markAllRead, deleteNotif, clearAll,
+      notifications,
+      unreadCount,
+      fetchNotifs,
+      markRead,
+      markAllRead,
+      deleteNotif,
+      clearAll,
+
+      // NEW
+      selectedNotification,
+      openNotification,
+      closeNotification,
     }}>
       {children}
     </NotifContext.Provider>
