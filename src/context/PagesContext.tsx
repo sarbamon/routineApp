@@ -6,8 +6,7 @@ export const ALL_PAGES = [
   { id: "today",      label: "Today",          emoji: "📋", desc: "Tasks & reminders"           },
   { id: "money",      label: "Money Tracker",  emoji: "💰", desc: "Income, expenses & goals"    },
   { id: "attendance", label: "Attendance",     emoji: "📚", desc: "Track classes & subjects"    },
-  { id: "monthly",    label: "Monthly Report", emoji: "📅", desc: "Reports from all your pages" },
-  { id: "chat",       label: "Chat",           emoji: "💬", desc: "Private encrypted messages"  }
+  { id: "monthly",    label: "Monthly Report", emoji: "📅", desc: "Reports from all your pages" }
 ];
 
 interface PagesContextType {

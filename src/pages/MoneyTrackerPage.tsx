@@ -365,13 +365,17 @@ export default function MoneyTrackerPage() {
   // ── Delete ────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteItem_) return;
-    await fetch(`${API_URL}/api/money/${deleteItem_._id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${API_URL}/api/money/${deleteItem_._id}`, { 
+      method: "DELETE", 
+      headers: { Authorization: `Bearer ${token}` } });
     setDeleteItem(null);
     fetchData();
   };
 
   const markLoanPaid = async (id: string) => {
-    await fetch(`${API_URL}/api/money/${id}/paid`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${API_URL}/api/money/${id}/paid`, { 
+      method: "PATCH", 
+      headers: { Authorization: `Bearer ${token}` } });
     fetchData();
   };
 

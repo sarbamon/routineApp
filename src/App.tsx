@@ -17,7 +17,6 @@ import MoneyTrackerPage      from "./pages/MoneyTrackerPage";
 import AttendanceTrackerPage from "./pages/AttendanceTrackerPage";
 import SettingsPage          from "./pages/SettingsPage";
 import AdminPage             from "./pages/AdminPage";
-import ChatPage              from "./pages/ChatPage";
 import ProfilePage           from "./pages/ProfilePage";
 import BottomNav             from "./components/BottomNav";;
 
@@ -193,7 +192,6 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
             {enabledPages.includes("money")      && <Route path="/money"      element={<MoneyTrackerPage />}      />}
             {enabledPages.includes("attendance") && <Route path="/attendance" element={<AttendanceTrackerPage />} />}
             {enabledPages.includes("monthly")    && <Route path="/monthly"    element={<MonthlyReportPage />}     />}
-            {enabledPages.includes("chat") && <Route path="/chat" element={<ChatPage />} />}
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </div>
@@ -226,9 +224,54 @@ function App() {
     };
   }, []);
 
+  // ── Auto logout if inactive for 12 hours ──────────────────────────────────
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const updateActivity = () => {
+      localStorage.setItem("lastActivity", Date.now().toString());
+    };
+
+    // Initialize lastActivity timestamp if not set
+    if (!localStorage.getItem("lastActivity")) {
+      updateActivity();
+    }
+
+    // Add global activity listeners
+    window.addEventListener("click", updateActivity);
+    window.addEventListener("keydown", updateActivity);
+    window.addEventListener("scroll", updateActivity, { passive: true });
+    window.addEventListener("mousemove", updateActivity);
+    window.addEventListener("touchstart", updateActivity, { passive: true });
+
+    // Periodically check for inactivity (every 30 seconds)
+    const checkInterval = setInterval(() => {
+      const lastActivity = localStorage.getItem("lastActivity");
+      if (lastActivity) {
+        const diff = Date.now() - parseInt(lastActivity, 10);
+        const twelveHoursMs = 12 * 60 * 60 * 1000;
+        if (diff > twelveHoursMs) {
+          handleLogout();
+        }
+      } else {
+        updateActivity();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+      window.removeEventListener("scroll", updateActivity);
+      window.removeEventListener("mousemove", updateActivity);
+      window.removeEventListener("touchstart", updateActivity);
+      clearInterval(checkInterval);
+    };
+  }, [isLoggedIn]);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
+    localStorage.removeItem("lastActivity");
     setIsLoggedIn(false);
     setUsername("");
   };

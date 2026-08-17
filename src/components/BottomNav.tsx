@@ -5,7 +5,7 @@ export default function BottomNav() {
 
   const tabs = [
     { path: "/home", label: "HOME", icon: "🏠" }, 
-    { path: "/chat", label: "CHATS", icon: "💬" },
+    { path: "/today", label: "TODAY", icon: "📋" },
     { path: "/money", label: "MONEY", icon: "💰" },
     { path: "/settings", label: "SETTINGS", icon: "⚙️" },
   ];

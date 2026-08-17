@@ -8,11 +8,13 @@ type Props = {
 export default function Login({ onLogin }: Props) {
 
   const [username,setUsername] = useState("");
+  const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [error,setError] = useState("");
   const [message,setMessage] = useState("");
   const [loading,setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleLogin = async () => {
 
@@ -22,25 +24,46 @@ export default function Login({ onLogin }: Props) {
 
     try {
 
-      const res = await fetch(`${API_URL}/api/auth/login`,{
+      // Basic client-side email regex validation if signing up
+      if (isSignUp) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+          setError("Invalid email format");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const endpoint = isSignUp ? `${API_URL}/api/auth/register` : `${API_URL}/api/auth/login`;
+      const res = await fetch(endpoint,{
         method:"POST",
         headers:{
           "Content-Type":"application/json"
         },
-        body:JSON.stringify({username,password})
+        body: JSON.stringify(
+          isSignUp 
+            ? { username, email: email.trim(), password }
+            : { username, password }
+        )
       });
 
       const data = await res.json();
 
       if(res.ok){
-
-        localStorage.setItem("token",data.token);
-        localStorage.setItem("username", username);
-        setMessage("Login successful ✅");
+        if (isSignUp) {
+          setMessage("Account created successfully! Please log in. ✅");
+          setIsSignUp(false);
+          setPassword("");
+          setEmail("");
+        } else {
+          localStorage.setItem("token",data.token);
+          localStorage.setItem("username", username);
+          setMessage("Login successful ✅");
           setTimeout(()=>{onLogin(username);},1000);
-        } else { 
-          setError(data.message || "Login failed");
         }
+      } else { 
+        setError(data.message || (isSignUp ? "Registration failed" : "Login failed"));
+      }
 
     } catch {
 
@@ -54,8 +77,7 @@ export default function Login({ onLogin }: Props) {
 
   };
 
-  const canSubmit = username.trim() && password.trim() && !loading
-
+  const canSubmit = username.trim() && password.trim() && (!isSignUp || email.trim()) && !loading;
   return (
     <div className="min-h-screen bg-[#04040a] flex items-center justify-center px-4 relative overflow-hidden">
 
@@ -80,7 +102,7 @@ export default function Login({ onLogin }: Props) {
         <div className="bg-[#0d0d1a] border border-white/[0.06] rounded-3xl p-7 shadow-[0_0_80px_rgba(0,0,0,0.6)]">
 
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[3px] mb-6">
-            Member Login
+            {isSignUp ? "Create Account" : "Member Login"}
           </p>
 
           {/* ── Success banner ── */}
@@ -122,6 +144,32 @@ export default function Login({ onLogin }: Props) {
               />
             </div>
           </div>
+
+          {/* ── Email (Sign Up Only) ── */}
+          {isSignUp && (
+            <div className="mb-3.5">
+              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </span>
+                <input
+                  type="email"
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-10 pr-4 py-3 text-slate-200 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.06] transition-all placeholder:text-slate-600"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && canSubmit && handleLogin()}
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+          )}
 
           {/* ── Password ── */}
           <div className="mb-6">
@@ -189,12 +237,27 @@ export default function Login({ onLogin }: Props) {
                 >
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
-                Logging in...
+                {isSignUp ? "Registering..." : "Logging in..."}
               </span>
             ) : (
-              "Login →"
+              isSignUp ? "Register →" : "Login →"
             )}
           </button>
+
+          {/* Toggle Login / Sign Up */}
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError("");
+                setMessage("");
+              }}
+              className="text-xs text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer"
+            >
+              {isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up"}
+            </button>
+          </div>
 
         </div>
 

@@ -87,6 +87,45 @@ const [showPages, setShowPages] = useState(false);
   const [showFAQ,        setShowFAQ]        = useState(false);
   const [openFAQ,        setOpenFAQ]        = useState<number | null>(null);
 
+  // Modals for Terms, Privacy and Contact
+  const [showTerms,      setShowTerms]      = useState(false);
+  const [showPrivacy,    setShowPrivacy]    = useState(false);
+  const [showContact,    setShowContact]    = useState(false);
+  const [contactEmail,   setContactEmail]   = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactMsg,     setContactMsg]     = useState({ text: "", type: "" });
+  const [sendingContact, setSendingContact] = useState(false);
+
+  const handleContactSubmit = async () => {
+    if (!contactEmail.trim() || !contactMessage.trim()) return;
+    setSendingContact(true);
+    try {
+      const res = await fetch(`${API_URL}/api/contact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: contactEmail, message: contactMessage })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setContactMsg({ text: "✅ Message sent! We will contact you soon.", type: "success" });
+        setContactMessage("");
+        setTimeout(() => {
+          setContactMsg({ text: "", type: "" });
+          setShowContact(false);
+        }, 2000);
+      } else {
+        setContactMsg({ text: data.message || "Failed to send message", type: "error" });
+      }
+    } catch {
+      setContactMsg({ text: "Server error", type: "error" });
+    } finally {
+      setSendingContact(false);
+    }
+  };
+
   // ── Fetch profile ──────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async () => {
     try {
@@ -155,10 +194,12 @@ const [showPages, setShowPages] = useState(false);
     }
     setChangingPass(true);
     try {
-      const res  = await fetch(`${API_URL}/api/auth/change-password`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ oldPassword: oldPass, newPassword: newPass }),
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {method: "POST",headers: { 
+    "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ 
+    oldPassword: oldPass, 
+    newPassword: newPass 
+  }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -259,25 +300,8 @@ const [showPages, setShowPages] = useState(false);
         />
       </Section>
 
-      {/* ── My Activity ── */}
-      <Section title="My Activity">
-        <div className="px-4 py-4 grid grid-cols-3 gap-3">
-          {[
-            { label: "Requests Sent",     value: stats.friendRequestsSent,     color: "text-violet-400" },
-            { label: "Friends Made",      value: stats.friendRequestsAccepted, color: "text-emerald-400" },
-            { label: "Blocked Users",     value: stats.blockedUsers,            color: "text-red-400"    },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 text-center">
-              <p className={`text-xl font-black font-mono ${color}`}>{value}</p>
-              <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">{label}</p>
-            </div>
-          ))}
-        </div>
-      </Section>
-
       {/* ── App Preferences ── */}
-      {/* ── App Preferences ── */}
-<Section title="App Preferences">
+      <Section title="App Preferences">
   <SettingRow
     icon="📱"
     label="Manage Pages"
@@ -370,20 +394,25 @@ const [showPages, setShowPages] = useState(false);
         <SettingRow
           icon="📧"
           label="Contact Us"
-          sublabel="sarbamon@gmail.com"
-          onClick={() => window.open("mailto:sarbamon@gmail.com")}
+          sublabel="We will reach out to you"
+          onClick={() => {
+            setContactEmail("");
+            setContactMessage("");
+            setContactMsg({ text: "", type: "" });
+            setShowContact(true);
+          }}
         />
         <SettingRow
           icon="📄"
           label="Terms of Service"
           sublabel="Read our terms"
-          onClick={() => {}}
+          onClick={() => setShowTerms(true)}
         />
         <SettingRow
           icon="🔒"
           label="Privacy Policy"
           sublabel="How we handle your data"
-          onClick={() => {}}
+          onClick={() => setShowPrivacy(true)}
         />
       </Section>
 
@@ -552,6 +581,133 @@ const [showPages, setShowPages] = useState(false);
           </div>
         </>
       )}
+      {/* ── Contact Us Modal ── */}
+      {showContact && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50 backdrop-blur-sm" onClick={() => setShowContact(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-sm bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] pointer-events-auto">
+
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                <p className="text-sm font-black text-white">Contact Us</p>
+                <button onClick={() => setShowContact(false)} className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 cursor-pointer">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="px-5 py-5 space-y-4">
+                {contactMsg.text && (
+                  <div className={`px-3 py-2 rounded-xl text-xs font-bold border ${
+                    contactMsg.type === "success"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-red-500/10 text-red-400 border-red-500/20"
+                  }`}>{contactMsg.text}</div>
+                )}
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Gmail / Email Address</label>
+                  <input
+                    type="email"
+                    className={inputCls}
+                    placeholder="yourname@gmail.com"
+                    value={contactEmail}
+                    onChange={e => setContactEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Your Inquiry or Message</label>
+                  <textarea
+                    rows={4}
+                    className={`${inputCls} resize-none`}
+                    placeholder="Write your message here... we will contact you back."
+                    value={contactMessage}
+                    onChange={e => setContactMessage(e.target.value)}
+                    maxLength={1000}
+                  />
+                  <p className="text-[9px] text-slate-600 text-right mt-0.5">{contactMessage.length}/1000</p>
+                </div>
+                <button
+                  onClick={handleContactSubmit}
+                  disabled={!contactEmail.trim() || !contactMessage.trim() || sendingContact}
+                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-black uppercase tracking-widest rounded-xl cursor-pointer transition-colors"
+                >
+                  {sendingContact ? "Sending..." : "Submit Inquiry"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Terms of Service Modal ── */}
+      {showTerms && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50 backdrop-blur-sm" onClick={() => setShowTerms(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] pointer-events-auto max-h-[80vh] flex flex-col">
+
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
+                <p className="text-sm font-black text-white">Terms of Service</p>
+                <button onClick={() => setShowTerms(false)} className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 cursor-pointer">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto px-5 py-5 space-y-4 text-slate-400 text-xs leading-relaxed">
+                <h3 className="text-white font-bold text-sm">1. Terms of Use</h3>
+                <p>By registering or using the Akieme One productivity application, you agree to comply with and be bound by these terms. This application is intended for personal productivity tracking.</p>
+
+                <h3 className="text-white font-bold text-sm">2. Account Responsibility</h3>
+                <p>You are solely responsible for protecting your account credentials. We hash passwords for security, but please use strong passwords to prevent unauthorized access.</p>
+
+                <h3 className="text-white font-bold text-sm">3. Acceptable Behavior</h3>
+                <p>Users agree not to disrupt the servers, exploit APIs, or load fake/spammed tasks to overload the database. We reserve the right to limit access for abusive patterns.</p>
+
+                <h3 className="text-white font-bold text-sm">4. Disclaimer</h3>
+                <p>Akieme One is provided "as is" without warranty of any kind. We make efforts to maintain 100% database availability but are not liable for data loss or outages.</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Privacy Policy Modal ── */}
+      {showPrivacy && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50 backdrop-blur-sm" onClick={() => setShowPrivacy(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] pointer-events-auto max-h-[80vh] flex flex-col">
+
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
+                <p className="text-sm font-black text-white">Privacy Policy</p>
+                <button onClick={() => setShowPrivacy(false)} className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 cursor-pointer">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto px-5 py-5 space-y-4 text-slate-400 text-xs leading-relaxed">
+                <h3 className="text-white font-bold text-sm">1. Data Collection</h3>
+                <p>We collect and save your username, hashed password, optional email/Gmail address, and your personal tasks, routines, money logs, and class attendance logs to sync them across your devices.</p>
+
+                <h3 className="text-white font-bold text-sm">2. Security of Hashed Data</h3>
+                <p>Passwords are securely hashed using bcryptjs on the backend. Email addresses are sparse-indexed and handled safely. We do not store passwords in plain text.</p>
+
+                <h3 className="text-white font-bold text-sm">3. No Data Sharing</h3>
+                <p>We do not share, lease, sell, or rent your database records, email addresses, or usage logs to any advertising network or third parties.</p>
+
+                <h3 className="text-white font-bold text-sm">4. Contact Inquiries</h3>
+                <p>If you submit a contact inquiry, we only store the email address you provide and the message text in order to reach out to you.</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Version ── */}
       <p className="text-center text-[10px] text-slate-700 uppercase tracking-widest pb-4">
         Akieme One — Version {APP_VERSION}
