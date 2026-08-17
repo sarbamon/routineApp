@@ -11,12 +11,6 @@ interface ProfileData {
   bio:            string;
 }
 
-interface StatsData {
-  friendRequestsSent:     number;
-  friendRequestsAccepted: number;
-  blockedUsers:           number;
-}
-
 const ChevronRight = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6"/>
@@ -66,7 +60,7 @@ export default function SettingsPage() {
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
   const [profile,   setProfile]   = useState<ProfileData>({ username: "", profilePicture: "", bio: "" });
-  const [stats,     setStats]     = useState<StatsData>({ friendRequestsSent: 0, friendRequestsAccepted: 0, blockedUsers: 0 });
+
   // Add this state at the top with other states
 const [showPages, setShowPages] = useState(false);
 
@@ -143,27 +137,9 @@ const [showPages, setShowPages] = useState(false);
       // Profile fetch failed silently
     }
   }, [token]);
-
-  // ── Fetch stats ────────────────────────────────────────────────────────────
-  const fetchStats = useCallback(async () => {
-    try {
-      const res  = await fetch(`${API_URL}/api/friends/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch {
-      // Stats fetch failed silently
-    }
-  }, [token]);
-
   useEffect(() => {
     fetchProfile();
-    fetchStats();
-  }, [fetchProfile, fetchStats]);
-
+  }, [fetchProfile]);
   // ── Save pages ─────────────────────────────────────────────────────────────
   
   const handleSavePages = async () => {

@@ -74,7 +74,7 @@ useEffect(() => {
       const migrated: Todo[] = raw.map((t, i) =>
         typeof t === "string"
           ? { id: Date.now() + i, text: t, completed: false, date: today, listId: "personal" }
-          : { listId: "personal", date: today, ...t }
+          : { ...t, listId: t.listId || "personal", date: t.date || today }
       );
       setAllTodos(migrated);
       setNote(data.notes || "");
