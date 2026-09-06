@@ -4,20 +4,33 @@ import { API_URL } from "../config/api";
 const formatINR = (n: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
-const GOAL_COLORS = ["#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
-const EXP_CATS   = ["Food","Housing","Transport","Health","Shopping","Entertainment","Education","Other"];
-const INC_CATS   = ["Salary","Freelance","Business","Investment","Gift","Other"];
+const GOAL_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
+const EXP_CATS   = ["Food","Housing","Transport","Health","Shopping","Entertainment","Education","Other","Custom"];
+const INC_CATS   = ["Salary","Freelance","Business","Investment","Gift","Other","Custom"];
+
+const BILL_CATS = ["Credit Card", "Loan EMI", "Utility", "Subscription", "Rent", "Other", "Custom"];
+
+const PRESET_BILLS = [
+  { label: "Amazon Pay ICICI Card Bill", category: "Credit Card", amount: 2500, dueDate: "05" },
+  { label: "Personal Loan EMI", category: "Loan EMI", amount: 8500, dueDate: "10" },
+  { label: "Bajaj Finance EMI", category: "Loan EMI", amount: 3200, dueDate: "15" },
+];
 
 interface MoneyItem {
   _id: string;
-  type: "income" | "expense" | "loan" | "goal";
+  type: "income" | "expense" | "loan" | "goal" | "bill";
   label?: string;
   amount: number;
   date?: string;
+  dueDate?: string;
+  totalTenure?: number | null;
+  startMonth?: string;
+  status?: "active" | "completed";
   category?: string;
   person?: string;
   note?: string;
   paid?: boolean;
+  paidMonths?: string[];
   target?: number;
   saved?: number;
   color?: string;
@@ -48,23 +61,23 @@ const Icon = ({ name, size = 16 }: { name: string; size?: number }) => {
   return <span className="inline-flex items-center">{icons[name]}</span>;
 };
 
-const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-[#b6a0ff]/40 transition-colors";
+const inputCls = "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 text-xs outline-none focus:border-zinc-500 transition-colors";
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="mb-3.5">
-    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">{label}</label>
+    <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">{label}</label>
     {children}
   </div>
 );
 
-// ── Centered modal wrapper (not from bottom, so it clears the bottom nav) ─────
+// ── Centered modal wrapper ───────────────────────────────────────────────────
 function ModalWrap({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center px-4"
+      className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[200] flex items-center justify-center px-4"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-[420px] max-h-[80vh] overflow-y-auto bg-[#13131b] border border-white/[0.08] rounded-3xl p-6">
+      <div className="w-full max-w-[420px] max-h-[85vh] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
         {children}
       </div>
     </div>
@@ -82,22 +95,54 @@ function EntryModal({ onClose, onSave, defaultType, editItem, defaultDate }: {
   const isEdit = !!editItem;
   const [type, setType] = useState(editItem?.type || defaultType || "expense");
   const [loading, setLoading] = useState(false);
+  const initialCat = editItem?.category || (type === "expense" ? "Food" : type === "bill" ? "Credit Card" : "Salary");
+  const isInitialCustom = !!editItem?.category && !EXP_CATS.concat(INC_CATS).concat(BILL_CATS).filter(c => c !== "Custom").includes(editItem.category);
+
+  const [selectedCategory, setSelectedCategory] = useState(isInitialCustom ? "Custom" : initialCat);
+  const [customCategory, setCustomCategory] = useState(isInitialCustom ? (editItem?.category || "") : "");
+  
+  const [tenureMode, setTenureMode] = useState<string>(
+    editItem?.totalTenure ? (["3","6","9","12"].includes(String(editItem.totalTenure)) ? String(editItem.totalTenure) : "custom") : "0"
+  );
+  const [customTenure, setCustomTenure] = useState<string>(editItem?.totalTenure ? String(editItem.totalTenure) : "");
+
   const [form, setForm] = useState({
-    label:     editItem?.label     || "",
-    amount:    editItem?.amount    ? String(editItem.amount) : "",
-    date:      editItem?.date      || defaultDate || new Date().toISOString().split("T")[0],
-    category:  editItem?.category  || "Food",
-    person:    editItem?.person    || "",
-    note:      editItem?.note      || "",
-    goalLabel: editItem?.label     || "",
-    target:    editItem?.target    ? String(editItem.target) : "",
-    color:     editItem?.color     || "#8b5cf6",
+    label:      editItem?.label      || "",
+    amount:     editItem?.amount     ? String(editItem.amount) : "",
+    date:       editItem?.date       || defaultDate || new Date().toISOString().split("T")[0],
+    dueDate:    editItem?.dueDate    || "05",
+    startMonth: editItem?.startMonth || (defaultDate ? defaultDate.slice(0, 7) : new Date().toISOString().slice(0, 7)),
+    person:     editItem?.person     || "",
+    note:       editItem?.note       || "",
+    goalLabel:  editItem?.label      || "",
+    target:     editItem?.target     ? String(editItem.target) : "",
+    color:      editItem?.color      || "#6366f1",
   });
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  const applyPresetBill = (preset: { label: string; category: string; amount: number; dueDate: string }) => {
+    setForm(f => ({
+      ...f,
+      label: preset.label,
+      amount: String(preset.amount),
+      dueDate: preset.dueDate,
+    }));
+    setSelectedCategory(preset.category);
+  };
+
+  const handleTypeChange = (t: string) => {
+    setType(t);
+    if (selectedCategory !== "Custom") {
+      setSelectedCategory(t === "expense" ? "Food" : t === "bill" ? "Credit Card" : "Salary");
+    }
+  };
+
   const isValid = () => {
-    if (type === "expense" || type === "income") return form.label.trim() && Number(form.amount) > 0 && form.date;
+    if (type === "expense" || type === "income" || type === "bill") {
+      const catValid = selectedCategory === "Custom" ? customCategory.trim().length > 0 : true;
+      return form.label.trim() && Number(form.amount) > 0 && catValid;
+    }
     if (type === "loan")   return form.person.trim() && Number(form.amount) > 0 && form.date;
     if (type === "goal")   return form.goalLabel.trim() && Number(form.target) > 0;
     return false;
@@ -106,9 +151,13 @@ function EntryModal({ onClose, onSave, defaultType, editItem, defaultDate }: {
   const handleSubmit = async () => {
     if (!isValid()) return;
     setLoading(true);
+    const finalCategory = selectedCategory === "Custom" ? customCategory.trim() : selectedCategory;
+    const finalTenure = tenureMode === "0" ? null : (tenureMode === "custom" ? (Number(customTenure) || null) : Number(tenureMode));
+
     const payloads: Record<string, Partial<MoneyItem>> = {
-      expense: { type: "expense", label: form.label, amount: Number(form.amount), date: form.date, category: form.category },
-      income:  { type: "income",  label: form.label, amount: Number(form.amount), date: form.date, category: form.category },
+      expense: { type: "expense", label: form.label, amount: Number(form.amount), date: form.date, category: finalCategory },
+      income:  { type: "income",  label: form.label, amount: Number(form.amount), date: form.date, category: finalCategory },
+      bill:    { type: "bill",    label: form.label, amount: Number(form.amount), dueDate: form.dueDate, totalTenure: finalTenure, startMonth: form.startMonth, category: finalCategory, date: form.date },
       loan:    { type: "loan",    person: form.person, amount: Number(form.amount), date: form.date, note: form.note, paid: editItem?.paid || false },
       goal:    { type: "goal",    label: form.goalLabel, target: Number(form.target), saved: editItem?.saved || 0, color: form.color },
     };
@@ -120,39 +169,113 @@ function EntryModal({ onClose, onSave, defaultType, editItem, defaultDate }: {
   return (
     <ModalWrap onClose={onClose}>
       <div className="flex justify-between items-center mb-5">
-        <span className="text-base font-black text-white">{isEdit ? "Edit Entry" : "Add Entry"}</span>
-        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.06] text-slate-400 cursor-pointer flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors border-none">
+        <span className="text-base font-bold text-zinc-100">{isEdit ? "Edit Entry" : "Add Entry"}</span>
+        <button onClick={onClose} className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex items-center justify-center cursor-pointer">
           <Icon name="x" size={14} />
         </button>
       </div>
 
-      {/* Type selector — locked when editing */}
+      {/* Type selector */}
       {!isEdit && (
-        <div className="grid grid-cols-4 gap-1.5 mb-5">
-          {["expense","income","loan","goal"].map(t => (
-            <button key={t} onClick={() => setType(t)}
-              className={`py-2 px-1.5 rounded-xl text-[9px] font-black uppercase tracking-wide cursor-pointer transition-all border ${
-                type === t ? "border-[#b6a0ff]/30 bg-[#b6a0ff]/10 text-[#b6a0ff]" : "border-white/[0.06] bg-white/[0.03] text-slate-500"
+        <div className="grid grid-cols-5 gap-1 mb-5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
+          {["expense","income","bill","loan","goal"].map(t => (
+            <button key={t} onClick={() => handleTypeChange(t)}
+              className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider cursor-pointer transition-all border-none ${
+                type === t ? "bg-zinc-100 text-zinc-950 font-bold shadow-sm" : "bg-transparent text-zinc-400 hover:text-zinc-200"
               }`}
             >{t}</button>
           ))}
         </div>
       )}
       {isEdit && (
-        <div className="mb-4 px-3 py-2 bg-white/[0.04] rounded-xl border border-white/[0.06]">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Type: <span className="text-[#b6a0ff]">{type}</span></p>
+        <div className="mb-4 px-3 py-2 bg-zinc-900 rounded-xl border border-zinc-800">
+          <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Type: <span className="text-zinc-100 font-bold">{type}</span></p>
         </div>
       )}
 
-      {(type === "expense" || type === "income") && <>
-        <Field label="Description"><input className={inputCls} placeholder="e.g. Groceries" value={form.label} onChange={e => set("label", e.target.value)} /></Field>
-        <Field label="Amount (₹)"><input className={inputCls} type="number" placeholder="0" value={form.amount} onChange={e => set("amount", e.target.value)} /></Field>
-        <Field label="Category">
-          <select className={inputCls} value={form.category} onChange={e => set("category", e.target.value)}>
-            {(type === "expense" ? EXP_CATS : INC_CATS).map(c => <option key={c} className="bg-[#13131b]">{c}</option>)}
-          </select>
+      {type === "bill" && (
+        <div className="mb-4 bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+          <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Quick Presets:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_BILLS.map(preset => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyPresetBill(preset)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium transition-colors border border-zinc-700 cursor-pointer"
+              >
+                + {preset.label.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(type === "expense" || type === "income" || type === "bill") && <>
+        <Field label={type === "bill" ? "Bill / Provider Name" : "Description"}>
+          <input className={inputCls} placeholder={type === "bill" ? "e.g. Amazon Pay / Bajaj Finance EMI" : "e.g. Groceries"} value={form.label} onChange={e => set("label", e.target.value)} />
         </Field>
-        <Field label="Date"><input className={inputCls} type="date" value={form.date} onChange={e => set("date", e.target.value)} /></Field>
+        <Field label="Amount (₹)"><input className={inputCls} type="number" placeholder="0" value={form.amount} onChange={e => set("amount", e.target.value)} /></Field>
+        
+        {type === "bill" && (<>
+          <Field label="Due Day of Month (1 - 31)">
+            <input className={inputCls} type="number" min="1" max="31" placeholder="e.g. 5" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} />
+          </Field>
+          <Field label="EMI Duration / Tenure">
+            <div className="grid grid-cols-5 gap-1 mb-2">
+              {[
+                { label: "Ongoing", val: "0" },
+                { label: "3 Mo",    val: "3" },
+                { label: "6 Mo",    val: "6" },
+                { label: "12 Mo",   val: "12" },
+                { label: "Custom",  val: "custom" },
+              ].map(t => (
+                <button
+                  key={t.val}
+                  type="button"
+                  onClick={() => setTenureMode(t.val)}
+                  className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                    tenureMode === t.val ? "bg-zinc-100 text-zinc-950 font-bold" : "bg-zinc-900 border border-zinc-800 text-zinc-400"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {tenureMode === "custom" && (
+              <input
+                className={`${inputCls} mt-1.5`}
+                type="number"
+                placeholder="Enter total EMI months (e.g. 9 or 18)"
+                value={customTenure}
+                onChange={e => setCustomTenure(e.target.value)}
+              />
+            )}
+            <p className="text-[10px] text-zinc-500 mt-1">
+              {tenureMode === "0" ? "Recurring every month indefinitely." : `Auto-completes and stops after ${tenureMode === "custom" ? customTenure || "?" : tenureMode} months of payments.`}
+            </p>
+          </Field>
+        </>)}
+
+        <Field label="Category">
+          <select className={inputCls} value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+            {(type === "expense" ? EXP_CATS : type === "bill" ? BILL_CATS : INC_CATS).map(c => (
+              <option key={c} value={c} className="bg-zinc-900 text-zinc-100">
+                {c === "Custom" ? "+ Custom Category..." : c}
+              </option>
+            ))}
+          </select>
+          {selectedCategory === "Custom" && (
+            <input
+              className={`${inputCls} mt-2`}
+              placeholder="Enter custom category name (e.g. Subscriptions)"
+              value={customCategory}
+              onChange={e => setCustomCategory(e.target.value)}
+              autoFocus
+            />
+          )}
+        </Field>
+        {type !== "bill" && <Field label="Date"><input className={inputCls} type="date" value={form.date} onChange={e => set("date", e.target.value)} /></Field>}
       </>}
 
       {type === "loan" && <>
@@ -176,8 +299,8 @@ function EntryModal({ onClose, onSave, defaultType, editItem, defaultDate }: {
       </>}
 
       <button onClick={handleSubmit} disabled={!isValid() || loading}
-        className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all mt-1 border-none ${
-          isValid() && !loading ? "bg-gradient-to-r from-[#7e51ff] to-[#b6a0ff] text-white cursor-pointer" : "bg-slate-800 text-slate-600 cursor-not-allowed"
+        className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all mt-2 border-none ${
+          isValid() && !loading ? "bg-white text-zinc-950 hover:bg-zinc-200 cursor-pointer shadow" : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
         }`}
       >
         {loading ? "Saving..." : isEdit ? "Save Changes" : `+ Add ${type}`}
@@ -201,21 +324,21 @@ function UpdateSavingsModal({ goal, onClose, onUpdate }: { goal: MoneyItem; onCl
   return (
     <ModalWrap onClose={onClose}>
       <div className="flex justify-between items-center mb-5">
-        <span className="text-base font-black text-white">Update Savings</span>
-        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.06] border-none text-slate-400 cursor-pointer flex items-center justify-center hover:bg-white/10 transition-colors">
+        <span className="text-base font-bold text-zinc-100">Update Savings</span>
+        <button onClick={onClose} className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 flex items-center justify-center transition-colors">
           <Icon name="x" size={14} />
         </button>
       </div>
-      <div className="mb-4 px-3.5 py-3 bg-[#b6a0ff]/[0.06] rounded-xl border border-[#b6a0ff]/[0.15]">
-        <div className="text-[10px] font-black text-[#b6a0ff] uppercase tracking-widest mb-1">{goal.label}</div>
-        <div className="text-[13px] text-slate-400 font-mono">{formatINR(goal.saved || 0)} <span className="text-slate-600">/ {formatINR(goal.target || 0)}</span></div>
+      <div className="mb-4 px-3.5 py-3 bg-zinc-900 rounded-xl border border-zinc-800">
+        <div className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{goal.label}</div>
+        <div className="text-xs text-zinc-400 font-mono">{formatINR(goal.saved || 0)} <span className="text-zinc-500">/ {formatINR(goal.target || 0)}</span></div>
       </div>
       <Field label="Add Amount (₹)">
         <input autoFocus type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
       </Field>
       <button onClick={handleSubmit} disabled={!valid || loading}
-        className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border-none ${
-          valid && !loading ? "bg-gradient-to-r from-[#7e51ff] to-[#b6a0ff] text-white cursor-pointer" : "bg-slate-800 text-slate-600 cursor-not-allowed"
+        className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border-none ${
+          valid && !loading ? "bg-white text-zinc-950 hover:bg-zinc-200 cursor-pointer shadow" : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
         }`}
       >
         {loading ? "Saving..." : "Add to Savings"}
@@ -230,13 +353,13 @@ function DeleteConfirmModal({ onClose, onConfirm, label }: { onClose: () => void
     <ModalWrap onClose={onClose}>
       <div className="text-center py-2">
         <div className="text-4xl mb-4">🗑️</div>
-        <h3 className="text-base font-black text-white mb-2">Delete Entry</h3>
-        <p className="text-xs text-slate-500 mb-6">Are you sure you want to delete <span className="text-white font-bold">"{label}"</span>? This cannot be undone.</p>
+        <h3 className="text-base font-bold text-zinc-100 mb-2">Delete Entry</h3>
+        <p className="text-xs text-zinc-400 mb-6">Are you sure you want to delete <span className="text-zinc-100 font-bold">"{label}"</span>? This cannot be undone.</p>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-white/[0.06] text-slate-300 text-xs font-black uppercase tracking-wide cursor-pointer border-none hover:bg-white/10 transition-colors">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-bold uppercase tracking-wider cursor-pointer border-none hover:bg-zinc-700 transition-colors">
             Cancel
           </button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-wide cursor-pointer hover:bg-red-500/30 transition-colors">
+          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-rose-500/30 transition-colors">
             Delete
           </button>
         </div>
@@ -252,24 +375,24 @@ function ItemMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => vo
     <div className="relative">
       <button
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-all cursor-pointer border-none bg-transparent"
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all cursor-pointer border-none bg-transparent"
       >
         <Icon name="more" size={16} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-8 z-20 w-36 bg-[#1f1f29] border border-white/[0.08] rounded-2xl overflow-hidden shadow-xl">
+          <div className="absolute right-0 top-8 z-20 w-36 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
             <button
               onClick={e => { e.stopPropagation(); setOpen(false); onEdit(); }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/[0.06] transition-colors cursor-pointer border-none bg-transparent text-left"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer border-none bg-transparent text-left"
             >
               <Icon name="edit" size={13} /> Edit
             </button>
-            <div className="h-px bg-white/[0.05]" />
+            <div className="h-px bg-zinc-800" />
             <button
               onClick={e => { e.stopPropagation(); setOpen(false); onDelete(); }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer border-none bg-transparent text-left"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer border-none bg-transparent text-left"
             >
               <Icon name="trash" size={13} /> Delete
             </button>
@@ -286,10 +409,10 @@ function DonutChart({ segments, total }: { segments: { label: string; value: num
   const r = 15.915;
   const circ = 2 * Math.PI * r;
   return (
-    <div className="bg-[#13131b] rounded-2xl p-5 flex items-center justify-between gap-6 border border-white/[0.05]">
+    <div className="bg-zinc-900 rounded-2xl p-5 flex items-center justify-between gap-6 border border-zinc-800 shadow-sm">
       <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
         <svg className="w-32 h-32" style={{ transform: "rotate(-90deg)" }} viewBox="0 0 36 36">
-          <circle cx="18" cy="18" fill="transparent" r={r} stroke="#252530" strokeWidth="3.5" />
+          <circle cx="18" cy="18" fill="transparent" r={r} stroke="#27272a" strokeWidth="3.5" />
           {segments.map((seg, i) => {
             const pct = total > 0 ? (seg.value / total) * 100 : 0;
             const dash = (pct / 100) * circ;
@@ -299,18 +422,18 @@ function DonutChart({ segments, total }: { segments: { label: string; value: num
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[10px] text-slate-500">Total</span>
-          <span className="text-base font-black text-white">{formatINR(total)}</span>
+          <span className="text-[10px] text-zinc-400 font-medium">Total</span>
+          <span className="text-base font-extrabold text-zinc-100">{formatINR(total)}</span>
         </div>
       </div>
-      <div className="flex-1 space-y-3">
+      <div className="flex-1 space-y-2.5">
         {segments.map((seg, i) => (
           <div key={i} className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-              <span className="text-xs text-slate-400">{seg.label}</span>
+              <span className="text-xs text-zinc-400 font-medium">{seg.label}</span>
             </div>
-            <span className="text-xs font-black text-white">{formatINR(seg.value)}</span>
+            <span className="text-xs font-bold text-zinc-100">{formatINR(seg.value)}</span>
           </div>
         ))}
       </div>
@@ -318,7 +441,6 @@ function DonutChart({ segments, total }: { segments: { label: string; value: num
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function MoneyTrackerPage() {
   const token = localStorage.getItem("token");
@@ -331,6 +453,7 @@ export default function MoneyTrackerPage() {
   const [expenses,    setExpenses]    = useState<MoneyItem[]>([]);
   const [loans,       setLoans]       = useState<MoneyItem[]>([]);
   const [goals,       setGoals]       = useState<MoneyItem[]>([]);
+  const [bills,       setBills]       = useState<MoneyItem[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [activeTab,   setActiveTab]   = useState("dashboard");
   const [showAdd,     setShowAdd]     = useState(false);
@@ -372,6 +495,7 @@ export default function MoneyTrackerPage() {
       setExpenses(data.expenses || []);
       setLoans(data.loans       || []);
       setGoals(data.goals       || []);
+      setBills(data.bills       || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [token]);
@@ -381,14 +505,12 @@ export default function MoneyTrackerPage() {
   // ── Add ───────────────────────────────────────────────────────────────────
   const handleSave = async (_type: string, data: Partial<MoneyItem>, id?: string) => {
     if (id) {
-      // Edit existing
       await fetch(`${API_URL}/api/money/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(data),
       });
     } else {
-      // Add new
       await fetch(`${API_URL}/api/money`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -412,6 +534,42 @@ export default function MoneyTrackerPage() {
     await fetch(`${API_URL}/api/money/${id}/paid`, { 
       method: "PATCH", 
       headers: { Authorization: `Bearer ${token}` } });
+    fetchData();
+  };
+
+  const markBillPaid = async (id: string) => {
+    await fetch(`${API_URL}/api/money/${id}/pay-bill`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ monthKey }),
+    });
+    fetchData();
+  };
+
+  const markBillUnpaid = async (id: string) => {
+    await fetch(`${API_URL}/api/money/${id}/unpay-bill`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ monthKey }),
+    });
+    fetchData();
+  };
+
+  const seedDefaultBills = async () => {
+    for (const preset of PRESET_BILLS) {
+      await fetch(`${API_URL}/api/money`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          type: "bill",
+          label: preset.label,
+          amount: preset.amount,
+          dueDate: preset.dueDate,
+          category: preset.category,
+          date: `${monthKey}-${preset.dueDate}`,
+        }),
+      });
+    }
     fetchData();
   };
 
@@ -443,7 +601,7 @@ export default function MoneyTrackerPage() {
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
     monthlyExpenses.forEach(e => { map[e.category || "Other"] = (map[e.category || "Other"] || 0) + e.amount; });
-    const colors = ["#b6a0ff", "#68fadd", "#ff96bb", "#f59e0b", "#3b82f6", "#ef4444"];
+    const colors = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#3b82f6", "#8b5cf6"];
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value], i) => ({ label, value, color: colors[i % colors.length] }));
   }, [monthlyExpenses]);
 
@@ -455,13 +613,14 @@ export default function MoneyTrackerPage() {
   );
 
   const budgetPct = stats.income > 0 ? Math.min(Math.round((stats.expenses / stats.income) * 100), 100) : 0;
-  const defaultAddType = ({ dashboard: "expense", goals: "goal", analytics: "expense", loans: "loan" } as Record<string, string>)[activeTab] || "expense";
+  const defaultAddType = ({ dashboard: "expense", bills: "bill", goals: "goal", analytics: "expense", loans: "loan" } as Record<string, string>)[activeTab] || "expense";
   const defaultEntryDate = isCurrentMonth
     ? new Date().toISOString().split("T")[0]
     : `${monthKey}-01`;
 
   const TABS = [
     { id: "dashboard", label: "Overview"  },
+    { id: "bills",     label: "Bills"     },
     { id: "goals",     label: "Goals"     },
     { id: "analytics", label: "Insights"  },
     { id: "loans",     label: "Loans"     },
@@ -469,39 +628,39 @@ export default function MoneyTrackerPage() {
 
   const EmptyState = ({ emoji, text }: { emoji: string; text: string }) => (
     <div className="text-center py-12">
-      <div className="text-4xl mb-3 opacity-20">{emoji}</div>
-      <div className="text-xs font-semibold text-slate-600">{text}</div>
+      <div className="text-4xl mb-3 opacity-30">{emoji}</div>
+      <div className="text-xs font-medium text-zinc-500">{text}</div>
     </div>
   );
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0d0d15] flex items-center justify-center">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-[#b6a0ff]/30 border-t-[#b6a0ff] rounded-full animate-spin" />
-        <p className="text-xs text-slate-600">Loading...</p>
+        <div className="w-7 h-7 border-2 border-zinc-800 border-t-zinc-200 rounded-full animate-spin" />
+        <p className="text-xs text-zinc-500">Loading...</p>
       </div>
     </div>
   );
 
   return (
-    <div className="bg-[#0d0d15] text-[#efecf8] min-h-full">
+    <div className="bg-zinc-950 text-zinc-100 min-h-full font-sans pb-10">
 
       {/* ── Sticky tab bar ── */}
-      <div className="sticky top-0 z-20 bg-[#0d0d15]/95 backdrop-blur-sm border-b border-white/[0.06] px-4 py-3">
+      <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {TABS.map(({ id, label }) => (
               <button key={id} onClick={() => setActiveTab(id)}
-                className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide cursor-pointer whitespace-nowrap transition-all border ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer whitespace-nowrap transition-all ${
                   activeTab === id
-                    ? "bg-[#b6a0ff]/15 border-[#b6a0ff]/30 text-[#b6a0ff]"
-                    : "bg-white/[0.03] border-white/[0.06] text-slate-500 hover:text-slate-300"
+                    ? "bg-zinc-800 border border-zinc-700 text-zinc-100 shadow-sm"
+                    : "bg-transparent border border-transparent text-zinc-400 hover:text-zinc-200"
                 }`}
               >{label}</button>
             ))}
           </div>
           <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#7e51ff] to-[#b6a0ff] text-white text-[10px] font-black uppercase tracking-wide cursor-pointer border-none whitespace-nowrap shrink-0">
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white text-zinc-950 text-xs font-bold tracking-wide hover:bg-zinc-200 cursor-pointer border-none whitespace-nowrap shrink-0 shadow">
             <Icon name="plus" size={12} /> Add
           </button>
         </div>
@@ -511,23 +670,23 @@ export default function MoneyTrackerPage() {
       <div className="px-4 pt-5 pb-8 space-y-5 max-w-lg mx-auto">
 
         {/* ── Month Selector Bar ── */}
-        <div className="flex items-center justify-between bg-[#13131b] border border-white/[0.06] rounded-2xl px-4 py-2.5">
+        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm">
           <button
             onClick={handlePrevMonth}
-            className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.1] flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white hover:bg-zinc-700 flex items-center justify-center cursor-pointer transition-colors"
             title="Previous Month"
           >
             <Icon name="left" size={14} />
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black tracking-wide text-white">
+            <span className="text-sm font-bold tracking-wide text-zinc-100">
               {MONTH_NAMES[selectedMonth]} {selectedYear}
             </span>
             {!isCurrentMonth && (
               <button
                 onClick={handleResetToCurrent}
-                className="px-2 py-0.5 rounded-md bg-[#b6a0ff]/15 border border-[#b6a0ff]/30 text-[#b6a0ff] text-[9px] font-black uppercase tracking-wider cursor-pointer hover:bg-[#b6a0ff]/25 transition-colors"
+                className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-medium cursor-pointer hover:bg-zinc-700 transition-colors"
               >
                 This Month
               </button>
@@ -536,7 +695,7 @@ export default function MoneyTrackerPage() {
 
           <button
             onClick={handleNextMonth}
-            className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.1] flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white hover:bg-zinc-700 flex items-center justify-center cursor-pointer transition-colors"
             title="Next Month"
           >
             <Icon name="right" size={14} />
@@ -547,36 +706,33 @@ export default function MoneyTrackerPage() {
         {activeTab === "dashboard" && <>
 
           {/* Balance card */}
-          <div className="bg-[#1f1f29]/80 backdrop-blur-xl rounded-2xl p-6 relative overflow-hidden border border-white/[0.06]">
-            <div className="absolute -top-16 -right-16 w-40 h-40 bg-[#b6a0ff]/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10">
-              <p className="text-xs text-[#acaab5] mb-1">Net Balance ({MONTH_NAMES[selectedMonth]})</p>
-              <p className="text-4xl font-black tracking-tight text-[#efecf8] mb-5">{formatINR(stats.net)}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-[#68fadd]/5 border border-[#68fadd]/10 rounded-xl p-3">
-                  <p className="text-[9px] font-black text-[#68fadd] uppercase tracking-widest mb-1">Income</p>
-                  <p className="text-base font-black">{formatINR(stats.income)}</p>
-                  <p className="text-[10px] text-[#68fadd]/60">{monthlyIncome.length} entries</p>
-                </div>
-                <div className="bg-[#ff96bb]/5 border border-[#ff96bb]/10 rounded-xl p-3">
-                  <p className="text-[9px] font-black text-[#ff96bb] uppercase tracking-widest mb-1">Expenses</p>
-                  <p className="text-base font-black">{formatINR(stats.expenses)}</p>
-                  <p className="text-[10px] text-[#ff96bb]/60">{monthlyExpenses.length} entries</p>
-                </div>
+          <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 shadow-sm relative overflow-hidden">
+            <p className="text-xs font-medium text-zinc-400 mb-1">Net Balance ({MONTH_NAMES[selectedMonth]})</p>
+            <p className="text-3xl font-extrabold tracking-tight text-white mb-4">{formatINR(stats.net)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3">
+                <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider mb-1">Income</p>
+                <p className="text-base font-bold text-zinc-100">{formatINR(stats.income)}</p>
+                <p className="text-[10px] text-zinc-500">{monthlyIncome.length} entries</p>
+              </div>
+              <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3">
+                <p className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider mb-1">Expenses</p>
+                <p className="text-base font-bold text-zinc-100">{formatINR(stats.expenses)}</p>
+                <p className="text-[10px] text-zinc-500">{monthlyExpenses.length} entries</p>
               </div>
             </div>
           </div>
 
           {/* Budget progress */}
-          <div className="bg-[#13131b] rounded-2xl p-4 border border-white/[0.04]">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-sm font-black">Monthly Budget ({MONTH_NAMES[selectedMonth]})</h2>
-              <span className="text-[#acaab5] text-xs font-medium">{budgetPct}% used</span>
+          <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 shadow-sm">
+            <div className="flex justify-between items-center mb-2.5">
+              <h2 className="text-sm font-bold text-zinc-200">Monthly Budget ({MONTH_NAMES[selectedMonth]})</h2>
+              <span className="text-zinc-400 text-xs font-medium">{budgetPct}% used</span>
             </div>
-            <div className="bg-[#252530] h-2.5 rounded-full overflow-hidden mb-2">
-              <div className="h-full bg-gradient-to-r from-[#7e51ff] to-[#b6a0ff] rounded-full transition-all duration-700" style={{ width: `${budgetPct}%` }} />
+            <div className="bg-zinc-800 h-2 rounded-full overflow-hidden mb-2">
+              <div className="h-full bg-zinc-100 rounded-full transition-all duration-700" style={{ width: `${budgetPct}%` }} />
             </div>
-            <div className="flex justify-between text-[10px] font-medium text-[#acaab5]">
+            <div className="flex justify-between text-[11px] font-medium text-zinc-400">
               <span>Spent: {formatINR(stats.expenses)}</span>
               <span>Income: {formatINR(stats.income)}</span>
             </div>
@@ -586,8 +742,8 @@ export default function MoneyTrackerPage() {
           {categoryBreakdown.length > 0 && (
             <div>
               <div className="flex justify-between items-center mb-3">
-                <h2 className="text-sm font-black">Spending Analysis</h2>
-                <button onClick={() => setActiveTab("analytics")} className="text-[#b6a0ff] text-[10px] font-black uppercase tracking-widest border-none bg-transparent cursor-pointer">Details →</button>
+                <h2 className="text-sm font-bold text-zinc-200">Spending Analysis</h2>
+                <button onClick={() => setActiveTab("analytics")} className="text-zinc-400 hover:text-zinc-200 text-[10px] font-semibold uppercase tracking-wider border-none bg-transparent cursor-pointer">Details →</button>
               </div>
               <DonutChart segments={categoryBreakdown} total={stats.expenses} />
             </div>
@@ -596,16 +752,16 @@ export default function MoneyTrackerPage() {
           {/* Top categories */}
           {categoryBreakdown.length > 0 && (
             <div>
-              <h2 className="text-sm font-black mb-3">Top Categories</h2>
-              <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              <h2 className="text-sm font-bold text-zinc-200 mb-3">Top Categories</h2>
+              <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                 {categoryBreakdown.map((cat, i) => (
-                  <div key={i} className="flex-shrink-0 bg-[#1f1f29] px-4 py-4 rounded-2xl flex flex-col items-start gap-2 min-w-[110px] border border-white/[0.04]">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: cat.color + "20", color: cat.color }}>
-                      <Icon name="wallet" size={14} />
+                  <div key={i} className="flex-shrink-0 bg-zinc-900 px-3.5 py-3 rounded-xl flex flex-col items-start gap-1.5 min-w-[110px] border border-zinc-800">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-zinc-800 text-zinc-300">
+                      <Icon name="wallet" size={13} />
                     </div>
                     <div>
-                      <p className="text-xs text-[#acaab5]">{cat.label}</p>
-                      <p className="text-sm font-black">{formatINR(cat.value)}</p>
+                      <p className="text-[11px] text-zinc-400">{cat.label}</p>
+                      <p className="text-xs font-bold text-zinc-100">{formatINR(cat.value)}</p>
                     </div>
                   </div>
                 ))}
@@ -613,24 +769,24 @@ export default function MoneyTrackerPage() {
             </div>
           )}
 
-          {/* Recent activity with edit/delete */}
+          {/* Recent activity */}
           <div>
-            <h2 className="text-sm font-black mb-3">Recent Activity ({MONTH_NAMES[selectedMonth]})</h2>
+            <h2 className="text-sm font-bold text-zinc-200 mb-3">Recent Activity ({MONTH_NAMES[selectedMonth]})</h2>
             {recentActivity.length === 0
               ? <EmptyState emoji="📭" text={`No transactions in ${MONTH_NAMES[selectedMonth]} ${selectedYear}. Tap Add to get started.`} />
               : recentActivity.map(item => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-[#191922]/60 rounded-2xl mb-2 border border-white/[0.03]">
+                <div key={item._id} className="flex items-center justify-between p-3.5 bg-zinc-900 rounded-xl mb-2 border border-zinc-800">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${item.atype === "inc" ? "bg-[#68fadd]/10 text-[#68fadd]" : "bg-[#ff96bb]/10 text-[#ff96bb]"}`}>
-                      <Icon name={item.atype === "inc" ? "up" : "down"} size={16} />
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${item.atype === "inc" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"}`}>
+                      <Icon name={item.atype === "inc" ? "up" : "down"} size={15} />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-black text-sm truncate">{item.label}</p>
-                      <p className="text-[10px] text-[#acaab5] mt-0.5">{item.category} • {item.date}</p>
+                      <p className="font-bold text-xs text-zinc-100 truncate">{item.label}</p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">{item.category} • {item.date}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`font-black text-sm ${item.atype === "inc" ? "text-[#68fadd]" : "text-[#efecf8]"}`}>
+                    <span className={`font-bold text-xs ${item.atype === "inc" ? "text-emerald-400" : "text-zinc-100"}`}>
                       {item.atype === "inc" ? "+" : "-"}{formatINR(item.amount)}
                     </span>
                     <ItemMenu
@@ -645,33 +801,166 @@ export default function MoneyTrackerPage() {
 
           {/* Outstanding loans */}
           {stats.loans > 0 && (
-            <div className="bg-[#13131b] rounded-2xl p-4 flex justify-between items-center border border-[#f59e0b]/10 cursor-pointer" onClick={() => setActiveTab("loans")}>
+            <div className="bg-zinc-900 rounded-2xl p-4 flex justify-between items-center border border-zinc-800 cursor-pointer" onClick={() => setActiveTab("loans")}>
               <div>
-                <p className="text-[9px] font-black text-[#f59e0b] uppercase tracking-widest mb-1">Outstanding Loans</p>
-                <p className="text-xl font-black">{formatINR(stats.loans)}</p>
+                <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-1">Outstanding Loans</p>
+                <p className="text-xl font-bold text-zinc-100">{formatINR(stats.loans)}</p>
               </div>
-              <div className="text-5xl opacity-20">🤝</div>
+              <div className="text-4xl opacity-30">🤝</div>
             </div>
           )}
         </>}
 
+        {/* ── Bills ── */}
+        {activeTab === "bills" && (() => {
+          const visibleBills = bills.filter(bill => {
+            const isPaidThisMonth = bill.paidMonths?.includes(monthKey);
+            if (isPaidThisMonth) return true;
+            if (bill.status === "completed") return false;
+            if (bill.startMonth && monthKey < bill.startMonth) return false;
+            return true;
+          });
+
+          return (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-1">
+                <h2 className="text-base font-bold text-zinc-100">Monthly Bills & EMIs</h2>
+                <button onClick={() => setShowAdd(true)} className="text-zinc-300 hover:text-white text-[11px] font-bold uppercase tracking-wider border-none bg-transparent cursor-pointer">+ Add Bill</button>
+              </div>
+              <p className="text-xs text-zinc-400 mb-3">Recurring bills & EMIs due ({MONTH_NAMES[selectedMonth]} {selectedYear})</p>
+
+              {/* Bills Summary Banner */}
+              {visibleBills.length > 0 && (() => {
+                const totalBillAmt = visibleBills.reduce((s, b) => s + b.amount, 0);
+                const paidBills = visibleBills.filter(b => b.paidMonths?.includes(monthKey));
+                const paidBillAmt = paidBills.reduce((s, b) => s + b.amount, 0);
+                const dueBillAmt = totalBillAmt - paidBillAmt;
+                return (
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4 grid grid-cols-3 gap-2 text-center shadow-sm">
+                    <div>
+                      <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Total Monthly</p>
+                      <p className="text-sm font-bold text-zinc-100 mt-1">{formatINR(totalBillAmt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Paid</p>
+                      <p className="text-sm font-bold text-emerald-400 mt-1">{formatINR(paidBillAmt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Pending</p>
+                      <p className="text-sm font-bold text-amber-400 mt-1">{formatINR(dueBillAmt)}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {visibleBills.length === 0 ? (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center shadow-sm">
+                  <div className="text-4xl mb-3">💳</div>
+                  <h3 className="text-sm font-bold text-zinc-100 mb-1">No Active Bills for {MONTH_NAMES[selectedMonth]}</h3>
+                  <p className="text-xs text-zinc-400 mb-5">Track Amazon Pay, Personal Loan EMIs, Bajaj Finance, and 3/6-month EMIs.</p>
+                  <div className="flex flex-col gap-2 max-w-xs mx-auto">
+                    <button
+                      onClick={seedDefaultBills}
+                      className="py-2.5 px-4 rounded-xl bg-white text-zinc-950 text-xs font-bold tracking-wider cursor-pointer border-none shadow hover:bg-zinc-200 transition-colors"
+                    >
+                      ⚡ Add Common Bills (Amazon Pay, EMIs)
+                    </button>
+                    <button
+                      onClick={() => setShowAdd(true)}
+                      className="py-2.5 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer hover:bg-zinc-700 transition-colors"
+                    >
+                      + Add Custom Bill
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {visibleBills.map(bill => {
+                    const isPaid = bill.paidMonths?.includes(monthKey);
+                    const paidCount = bill.paidMonths?.length || 0;
+                    const isCompleted = bill.status === "completed" || (bill.totalTenure ? paidCount >= bill.totalTenure : false);
+                    const emiPct = bill.totalTenure ? Math.min((paidCount / bill.totalTenure) * 100, 100) : 0;
+
+                    return (
+                      <div key={bill._id} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-4 transition-all ${isPaid ? "opacity-75 border-zinc-800" : ""}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isPaid ? "bg-emerald-500/10 text-emerald-400" : "bg-indigo-500/10 text-indigo-400"}`}>
+                              <Icon name="payments" size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-xs text-zinc-100 truncate">{bill.label}</p>
+                              <p className="text-[10px] text-zinc-400 mt-0.5">
+                                {bill.category || "Bill"} • Due on {bill.dueDate ? `${bill.dueDate}th` : "Monthly"}
+                                {bill.totalTenure && ` • ${isCompleted ? "Completed" : `EMI ${Math.min(paidCount + (isPaid ? 0 : 1), bill.totalTenure)} of ${bill.totalTenure}`}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-bold text-xs text-zinc-100">{formatINR(bill.amount)}</span>
+                            <ItemMenu onEdit={() => setEditItem(bill)} onDelete={() => setDeleteItem(bill)} />
+                          </div>
+                        </div>
+
+                        {/* Mini EMI Tenure Progress Bar */}
+                        {bill.totalTenure && (
+                          <div className="mt-2 mb-3">
+                            <div className="flex justify-between text-[10px] font-medium mb-1">
+                              <span className="text-indigo-400">EMI Tenure ({paidCount}/{bill.totalTenure} Paid)</span>
+                              <span className="text-zinc-400">{Math.round(emiPct)}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${emiPct}%` }} />
+                            </div>
+                          </div>
+                        )}
+
+                        {isPaid ? (
+                          <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                            <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1.5 tracking-wide">
+                              <Icon name="check" size={12} /> {isCompleted ? `Completed (${paidCount}/${bill.totalTenure} Paid)` : `Paid for ${MONTH_NAMES[selectedMonth]}`}
+                            </span>
+                            <button
+                              onClick={() => markBillUnpaid(bill._id)}
+                              className="text-[10px] text-zinc-400 hover:text-zinc-200 tracking-wide border-none bg-transparent cursor-pointer font-medium"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => markBillPaid(bill._id)}
+                            className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/60 rounded-lg text-[10px] font-bold text-zinc-200 tracking-wide flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            <Icon name="check" size={12} /> Mark as Paid for {MONTH_NAMES[selectedMonth]}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── Analytics ── */}
         {activeTab === "analytics" && <>
-          <h2 className="text-base font-black">Spending Insights</h2>
+          <h2 className="text-base font-bold text-zinc-100">Spending Insights</h2>
           {categoryBreakdown.length === 0
             ? <EmptyState emoji="📊" text="Add expenses to see insights" />
             : <>
               <DonutChart segments={categoryBreakdown} total={stats.expenses} />
               <div className="space-y-2 mt-2">
                 {categoryBreakdown.map((cat, i) => (
-                  <div key={i} className="bg-[#13131b] rounded-2xl p-4 flex items-center justify-between border border-white/[0.04]">
+                  <div key={i} className="bg-zinc-900 rounded-xl p-3.5 flex items-center justify-between border border-zinc-800">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full shrink-0" style={{ background: cat.color }} />
-                      <span className="text-sm font-bold">{cat.label}</span>
+                      <span className="text-xs font-semibold text-zinc-200">{cat.label}</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-black">{formatINR(cat.value)}</p>
-                      <p className="text-[9px] text-slate-500">{stats.expenses > 0 ? Math.round((cat.value / stats.expenses) * 100) : 0}% of spend</p>
+                      <p className="text-xs font-bold text-zinc-100">{formatINR(cat.value)}</p>
+                      <p className="text-[10px] text-zinc-500">{stats.expenses > 0 ? Math.round((cat.value / stats.expenses) * 100) : 0}% of spend</p>
                     </div>
                   </div>
                 ))}
@@ -682,31 +971,31 @@ export default function MoneyTrackerPage() {
 
         {/* ── Goals ── */}
         {activeTab === "goals" && <>
-          <h2 className="text-base font-black">Savings Goals</h2>
+          <h2 className="text-base font-bold text-zinc-100">Savings Goals</h2>
           {goals.length === 0
             ? <EmptyState emoji="🎯" text="No goals yet. Tap Add to set one." />
             : goals.map(goal => (
-              <div key={goal._id} className="bg-[#13131b] border border-white/[0.04] rounded-2xl p-4 mb-3">
+              <div key={goal._id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-3">
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span style={{ color: goal.color }}><Icon name="target" size={16} /></span>
-                    <span className="text-sm font-black truncate">{goal.label}</span>
+                    <span className="text-xs font-bold text-zinc-100 truncate">{goal.label}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-black" style={{ color: goal.color }}>{Math.round(((goal.saved || 0) / (goal.target || 1)) * 100)}%</span>
+                    <span className="text-[11px] font-bold" style={{ color: goal.color }}>{Math.round(((goal.saved || 0) / (goal.target || 1)) * 100)}%</span>
                     <ItemMenu onEdit={() => setEditItem(goal)} onDelete={() => setDeleteItem(goal)} />
                   </div>
                 </div>
-                <div className="h-2 bg-[#252530] rounded-full overflow-hidden mb-2">
+                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden mb-2">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(((goal.saved || 0) / (goal.target || 1)) * 100, 100)}%`, background: goal.color }} />
                 </div>
                 <div className="flex justify-between mb-3">
-                  <span className="text-[11px] text-[#acaab5]">{formatINR(goal.saved || 0)}</span>
-                  <span className="text-[11px] text-slate-500">Goal: {formatINR(goal.target || 0)}</span>
+                  <span className="text-[11px] text-zinc-300 font-mono">{formatINR(goal.saved || 0)}</span>
+                  <span className="text-[11px] text-zinc-500">Goal: {formatINR(goal.target || 0)}</span>
                 </div>
                 {(goal.saved || 0) < (goal.target || 0)
-                  ? <button onClick={() => setUpdateGoal(goal)} className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer border-none transition-colors" style={{ background: goal.color + "15", color: goal.color }}>+ Add to Savings</button>
-                  : <div className="text-center text-[10px] font-black text-[#68fadd] uppercase tracking-widest">🎉 Goal Reached!</div>
+                  ? <button onClick={() => setUpdateGoal(goal)} className="w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer border-none transition-colors" style={{ background: goal.color + "15", color: goal.color }}>+ Add to Savings</button>
+                  : <div className="text-center text-[10px] font-bold text-emerald-400 uppercase tracking-wider">🎉 Goal Reached!</div>
                 }
               </div>
             ))
@@ -715,32 +1004,32 @@ export default function MoneyTrackerPage() {
 
         {/* ── Loans ── */}
         {activeTab === "loans" && <>
-          <h2 className="text-base font-black">Loans & Debts</h2>
+          <h2 className="text-base font-bold text-zinc-100">Loans & Debts</h2>
           {loans.length === 0
             ? <EmptyState emoji="🤝" text="No loans tracked yet. Tap Add to track one." />
             : loans.map(loan => (
-              <div key={loan._id} className={`bg-[#13131b] border border-white/[0.04] rounded-2xl p-4 mb-3 ${loan.paid ? "opacity-40" : ""}`}>
+              <div key={loan._id} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-3 ${loan.paid ? "opacity-50" : ""}`}>
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex gap-3 items-center flex-1 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#f59e0b]/10 text-[#f59e0b] flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
                       <Icon name="users" size={15} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black truncate">{loan.person}</p>
-                      {loan.note && <p className="text-[10px] text-slate-500">{loan.note}</p>}
-                      <p className="text-[10px] text-slate-600">{loan.date}</p>
+                      <p className="text-xs font-bold text-zinc-100 truncate">{loan.person}</p>
+                      {loan.note && <p className="text-[10px] text-zinc-400">{loan.note}</p>}
+                      <p className="text-[10px] text-zinc-500">{loan.date}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="flex flex-col items-end gap-1">
-                      <span className="text-[#f59e0b] font-black text-sm">{formatINR(loan.amount)}</span>
-                      {loan.paid && <span className="text-[8px] bg-[#68fadd]/10 text-[#68fadd] border border-[#68fadd]/20 px-2 py-0.5 rounded-full font-black">COLLECTED</span>}
+                      <span className="text-amber-400 font-bold text-xs">{formatINR(loan.amount)}</span>
+                      {loan.paid && <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold uppercase">COLLECTED</span>}
                     </div>
                     <ItemMenu onEdit={() => setEditItem(loan)} onDelete={() => setDeleteItem(loan)} />
                   </div>
                 </div>
                 {!loan.paid && (
-                  <button onClick={() => markLoanPaid(loan._id)} className="w-full py-2.5 bg-[#f59e0b]/[0.08] border border-[#f59e0b]/20 rounded-xl text-[10px] font-black text-[#f59e0b] uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#f59e0b]/[0.14] transition-colors">
+                  <button onClick={() => markLoanPaid(loan._id)} className="w-full py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer hover:bg-amber-500/20 transition-colors">
                     <Icon name="check" size={12} /> Mark as Collected
                   </button>
                 )}
@@ -751,7 +1040,7 @@ export default function MoneyTrackerPage() {
 
       </div>
 
-      {/* ── Modals (all centered, above bottom nav) ── */}
+      {/* ── Modals ── */}
       {showAdd && (
         <EntryModal
           onClose={() => setShowAdd(false)}
