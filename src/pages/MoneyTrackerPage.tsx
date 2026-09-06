@@ -23,6 +23,8 @@ interface MoneyItem {
   color?: string;
 }
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 const Icon = ({ name, size = 16 }: { name: string; size?: number }) => {
   const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   const icons: Record<string, React.ReactNode> = {
@@ -40,6 +42,8 @@ const Icon = ({ name, size = 16 }: { name: string; size?: number }) => {
     analytics: <svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
     payments:  <svg {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
     dashboard: <svg {...p} fill="currentColor" stroke="none"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+    left:      <svg {...p}><polyline points="15 18 9 12 15 6"/></svg>,
+    right:     <svg {...p}><polyline points="9 18 15 12 9 6"/></svg>,
   };
   return <span className="inline-flex items-center">{icons[name]}</span>;
 };
@@ -68,11 +72,12 @@ function ModalWrap({ onClose, children }: { onClose: () => void; children: React
 }
 
 // ── Add / Edit Modal ──────────────────────────────────────────────────────────
-function EntryModal({ onClose, onSave, defaultType, editItem }: {
+function EntryModal({ onClose, onSave, defaultType, editItem, defaultDate }: {
   onClose: () => void;
   onSave: (type: string, data: Partial<MoneyItem>, id?: string) => Promise<void>;
   defaultType: string;
   editItem?: MoneyItem | null;
+  defaultDate?: string;
 }) {
   const isEdit = !!editItem;
   const [type, setType] = useState(editItem?.type || defaultType || "expense");
@@ -80,7 +85,7 @@ function EntryModal({ onClose, onSave, defaultType, editItem }: {
   const [form, setForm] = useState({
     label:     editItem?.label     || "",
     amount:    editItem?.amount    ? String(editItem.amount) : "",
-    date:      editItem?.date      || new Date().toISOString().split("T")[0],
+    date:      editItem?.date      || defaultDate || new Date().toISOString().split("T")[0],
     category:  editItem?.category  || "Food",
     person:    editItem?.person    || "",
     note:      editItem?.note      || "",
@@ -314,8 +319,13 @@ function DonutChart({ segments, total }: { segments: { label: string; value: num
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function MoneyTrackerPage() {
   const token = localStorage.getItem("token");
+
+  const now = new Date();
+  const [selectedYear,  setSelectedYear]  = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
 
   const [income,      setIncome]      = useState<MoneyItem[]>([]);
   const [expenses,    setExpenses]    = useState<MoneyItem[]>([]);
@@ -327,6 +337,32 @@ export default function MoneyTrackerPage() {
   const [editItem,    setEditItem]    = useState<MoneyItem | null>(null);
   const [deleteItem_,  setDeleteItem] = useState<MoneyItem | null>(null);
   const [updateGoal,  setUpdateGoal]  = useState<MoneyItem | null>(null);
+
+  const monthKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(y => y - 1);
+    } else {
+      setSelectedMonth(m => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(y => y + 1);
+    } else {
+      setSelectedMonth(m => m + 1);
+    }
+  };
+
+  const handleResetToCurrent = () => {
+    setSelectedYear(now.getFullYear());
+    setSelectedMonth(now.getMonth());
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -388,29 +424,41 @@ export default function MoneyTrackerPage() {
     fetchData();
   };
 
+  // ── Monthly Filtered Memos ─────────────────────────────────────────────────
+  const monthlyIncome = useMemo(() => {
+    return income.filter(i => i.date?.startsWith(monthKey));
+  }, [income, monthKey]);
+
+  const monthlyExpenses = useMemo(() => {
+    return expenses.filter(e => e.date?.startsWith(monthKey));
+  }, [expenses, monthKey]);
+
   const stats = useMemo(() => {
-    const totalIncome   = income.reduce((s, i) => s + i.amount, 0);
-    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+    const totalIncome   = monthlyIncome.reduce((s, i) => s + i.amount, 0);
+    const totalExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
     const totalLoans    = loans.filter(l => !l.paid).reduce((s, l) => s + l.amount, 0);
     return { income: totalIncome, expenses: totalExpenses, loans: totalLoans, net: totalIncome - totalExpenses };
-  }, [income, expenses, loans]);
+  }, [monthlyIncome, monthlyExpenses, loans]);
 
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
-    expenses.forEach(e => { map[e.category || "Other"] = (map[e.category || "Other"] || 0) + e.amount; });
+    monthlyExpenses.forEach(e => { map[e.category || "Other"] = (map[e.category || "Other"] || 0) + e.amount; });
     const colors = ["#b6a0ff", "#68fadd", "#ff96bb", "#f59e0b", "#3b82f6", "#ef4444"];
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value], i) => ({ label, value, color: colors[i % colors.length] }));
-  }, [expenses]);
+  }, [monthlyExpenses]);
 
   const recentActivity = useMemo(() =>
-    [...expenses.map(e => ({ ...e, atype: "exp" })), ...income.map(i => ({ ...i, atype: "inc" }))]
+    [...monthlyExpenses.map(e => ({ ...e, atype: "exp" })), ...monthlyIncome.map(i => ({ ...i, atype: "inc" }))]
       .sort((a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime())
-      .slice(0, 8),
-    [income, expenses]
+      .slice(0, 10),
+    [monthlyIncome, monthlyExpenses]
   );
 
   const budgetPct = stats.income > 0 ? Math.min(Math.round((stats.expenses / stats.income) * 100), 100) : 0;
   const defaultAddType = ({ dashboard: "expense", goals: "goal", analytics: "expense", loans: "loan" } as Record<string, string>)[activeTab] || "expense";
+  const defaultEntryDate = isCurrentMonth
+    ? new Date().toISOString().split("T")[0]
+    : `${monthKey}-01`;
 
   const TABS = [
     { id: "dashboard", label: "Overview"  },
@@ -462,6 +510,39 @@ export default function MoneyTrackerPage() {
       {/* ── Content ── */}
       <div className="px-4 pt-5 pb-8 space-y-5 max-w-lg mx-auto">
 
+        {/* ── Month Selector Bar ── */}
+        <div className="flex items-center justify-between bg-[#13131b] border border-white/[0.06] rounded-2xl px-4 py-2.5">
+          <button
+            onClick={handlePrevMonth}
+            className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.1] flex items-center justify-center cursor-pointer transition-colors"
+            title="Previous Month"
+          >
+            <Icon name="left" size={14} />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black tracking-wide text-white">
+              {MONTH_NAMES[selectedMonth]} {selectedYear}
+            </span>
+            {!isCurrentMonth && (
+              <button
+                onClick={handleResetToCurrent}
+                className="px-2 py-0.5 rounded-md bg-[#b6a0ff]/15 border border-[#b6a0ff]/30 text-[#b6a0ff] text-[9px] font-black uppercase tracking-wider cursor-pointer hover:bg-[#b6a0ff]/25 transition-colors"
+              >
+                This Month
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={handleNextMonth}
+            className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.1] flex items-center justify-center cursor-pointer transition-colors"
+            title="Next Month"
+          >
+            <Icon name="right" size={14} />
+          </button>
+        </div>
+
         {/* ── Dashboard ── */}
         {activeTab === "dashboard" && <>
 
@@ -469,18 +550,18 @@ export default function MoneyTrackerPage() {
           <div className="bg-[#1f1f29]/80 backdrop-blur-xl rounded-2xl p-6 relative overflow-hidden border border-white/[0.06]">
             <div className="absolute -top-16 -right-16 w-40 h-40 bg-[#b6a0ff]/10 rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10">
-              <p className="text-xs text-[#acaab5] mb-1">Net Balance</p>
+              <p className="text-xs text-[#acaab5] mb-1">Net Balance ({MONTH_NAMES[selectedMonth]})</p>
               <p className="text-4xl font-black tracking-tight text-[#efecf8] mb-5">{formatINR(stats.net)}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#68fadd]/5 border border-[#68fadd]/10 rounded-xl p-3">
                   <p className="text-[9px] font-black text-[#68fadd] uppercase tracking-widest mb-1">Income</p>
                   <p className="text-base font-black">{formatINR(stats.income)}</p>
-                  <p className="text-[10px] text-[#68fadd]/60">{income.length} entries</p>
+                  <p className="text-[10px] text-[#68fadd]/60">{monthlyIncome.length} entries</p>
                 </div>
                 <div className="bg-[#ff96bb]/5 border border-[#ff96bb]/10 rounded-xl p-3">
                   <p className="text-[9px] font-black text-[#ff96bb] uppercase tracking-widest mb-1">Expenses</p>
                   <p className="text-base font-black">{formatINR(stats.expenses)}</p>
-                  <p className="text-[10px] text-[#ff96bb]/60">{expenses.length} entries</p>
+                  <p className="text-[10px] text-[#ff96bb]/60">{monthlyExpenses.length} entries</p>
                 </div>
               </div>
             </div>
@@ -489,7 +570,7 @@ export default function MoneyTrackerPage() {
           {/* Budget progress */}
           <div className="bg-[#13131b] rounded-2xl p-4 border border-white/[0.04]">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-sm font-black">Monthly Budget</h2>
+              <h2 className="text-sm font-black">Monthly Budget ({MONTH_NAMES[selectedMonth]})</h2>
               <span className="text-[#acaab5] text-xs font-medium">{budgetPct}% used</span>
             </div>
             <div className="bg-[#252530] h-2.5 rounded-full overflow-hidden mb-2">
@@ -534,9 +615,9 @@ export default function MoneyTrackerPage() {
 
           {/* Recent activity with edit/delete */}
           <div>
-            <h2 className="text-sm font-black mb-3">Recent Activity</h2>
+            <h2 className="text-sm font-black mb-3">Recent Activity ({MONTH_NAMES[selectedMonth]})</h2>
             {recentActivity.length === 0
-              ? <EmptyState emoji="📭" text="No transactions yet. Tap Add to get started." />
+              ? <EmptyState emoji="📭" text={`No transactions in ${MONTH_NAMES[selectedMonth]} ${selectedYear}. Tap Add to get started.`} />
               : recentActivity.map(item => (
                 <div key={item._id} className="flex items-center justify-between p-4 bg-[#191922]/60 rounded-2xl mb-2 border border-white/[0.03]">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -676,6 +757,7 @@ export default function MoneyTrackerPage() {
           onClose={() => setShowAdd(false)}
           onSave={handleSave}
           defaultType={defaultAddType}
+          defaultDate={defaultEntryDate}
         />
       )}
       {editItem && (
