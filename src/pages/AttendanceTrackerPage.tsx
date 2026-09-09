@@ -10,11 +10,13 @@ interface AttendanceRecord {
   subject: string;
   hours: number;
   leaveReason?: string;
+  semester?: string;
 }
 
 interface SubjectItem {
   _id: string;
   name: string;
+  semester?: string;
 }
 
 const TrashIcon = () => (
@@ -29,13 +31,19 @@ const TrashIcon = () => (
 export default function AttendanceTrackerPage() {
   const token = localStorage.getItem("token");
 
-  const [attendance,  setAttendance]  = useState<AttendanceRecord[]>([]);
-  const [subjects,    setSubjects]    = useState<SubjectItem[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [newSubject,  setNewSubject]  = useState("");
-  const [addingSubj,  setAddingSubj]  = useState(false);
-  const [showManage,  setShowManage]  = useState(false);
-  const [msg,         setMsg]         = useState({ text: "", type: "" });
+  const [attendance,        setAttendance]        = useState<AttendanceRecord[]>([]);
+  const [subjects,          setSubjects]          = useState<SubjectItem[]>([]);
+  const [semesters,         setSemesters]         = useState<string[]>(["Semester 1"]);
+  const [selectedSemester,  setSelectedSemester]  = useState<string>(
+    localStorage.getItem("active_semester") || "Semester 1"
+  );
+  const [showAddSemModal,   setShowAddSemModal]   = useState(false);
+  const [newSemName,        setNewSemName]        = useState("");
+  const [loading,           setLoading]           = useState(true);
+  const [newSubject,        setNewSubject]        = useState("");
+  const [addingSubj,        setAddingSubj]        = useState(false);
+  const [showManage,        setShowManage]        = useState(false);
+  const [msg,               setMsg]               = useState({ text: "", type: "" });
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -54,28 +62,55 @@ export default function AttendanceTrackerPage() {
     setTimeout(() => setMsg({ text: "", type: "" }), 3000);
   };
 
-  // ── Fetch subjects ────────────────────────────────────────────────────────
+  // ── Fetch semesters ───────────────────────────────────────────────────────
+  const fetchSemesters = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/attendance/semesters`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const localSemStr = localStorage.getItem("custom_semesters");
+      const localSems: string[] = localSemStr ? JSON.parse(localSemStr) : [];
+      const activeSem = localStorage.getItem("active_semester");
+
+      if (res.ok) {
+        const data = await res.json();
+        const serverSems = Array.isArray(data) ? data : [];
+        const merged = Array.from(
+          new Set(["Semester 1", ...serverSems, ...localSems, ...(activeSem ? [activeSem] : [])])
+        ).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        setSemesters(merged);
+      }
+    } catch (err) {
+      console.error("Fetch semesters error:", err);
+    }
+  }, [token]);
+
+  // ── Fetch subjects for active semester ────────────────────────────────────
   const fetchSubjects = useCallback(async () => {
     try {
-      const res  = await fetch(`${API_URL}/api/attendance/subjects`, {
+      const res  = await fetch(`${API_URL}/api/attendance/subjects?semester=${encodeURIComponent(selectedSemester)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      setSubjects(Array.isArray(data) ? data : []);
-      // Auto-select first subject
-      if (data.length > 0 && !form.subject) {
-        setForm(f => ({ ...f, subject: data[0].name }));
+      const list = Array.isArray(data) ? data : [];
+      setSubjects(list);
+      // Auto-select first subject if form subject not in current subjects
+      if (list.length > 0) {
+        setForm(f => ({ ...f, subject: list[0].name }));
+      } else {
+        setForm(f => ({ ...f, subject: "" }));
       }
     } catch (err) {
       console.error("Fetch subjects error:", err);
+      setSubjects([]);
     }
-  }, [token]);
+  }, [token, selectedSemester]);
 
-  // ── Fetch attendance ──────────────────────────────────────────────────────
+  // ── Fetch attendance for active semester ──────────────────────────────────
   const fetchAttendance = useCallback(async () => {
     try {
-      const res  = await fetch(`${API_URL}/api/attendance`, {
+      const res  = await fetch(`${API_URL}/api/attendance?semester=${encodeURIComponent(selectedSemester)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed");
@@ -85,13 +120,63 @@ export default function AttendanceTrackerPage() {
       console.error("Fetch attendance error:", err);
       setAttendance([]);
     }
-  }, [token]);
+  }, [token, selectedSemester]);
 
-  // ── Load both on mount ────────────────────────────────────────────────────
+  // ── Load all on mount or semester change ──────────────────────────────────
   useEffect(() => {
+    fetchSemesters();
+  }, [fetchSemesters]);
+
+  useEffect(() => {
+    setLoading(true);
     Promise.all([fetchSubjects(), fetchAttendance()])
       .finally(() => setLoading(false));
   }, [fetchSubjects, fetchAttendance]);
+
+  const handleSemesterChange = (sem: string) => {
+    setSelectedSemester(sem);
+    localStorage.setItem("active_semester", sem);
+  };
+
+  const handleAddNextSemester = async () => {
+    let nextSem = newSemName.trim();
+    if (!nextSem) {
+      const match = selectedSemester.match(/\d+/);
+      const num = match ? parseInt(match[0]) + 1 : semesters.length + 1;
+      nextSem = `Semester ${num}`;
+    }
+
+    // Save semester to backend DB
+    try {
+      await fetch(`${API_URL}/api/attendance/semesters`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: nextSem }),
+      });
+    } catch (err) {
+      console.error("Save semester error:", err);
+    }
+
+    // Save semester to localStorage
+    const localSemStr = localStorage.getItem("custom_semesters");
+    const localSems: string[] = localSemStr ? JSON.parse(localSemStr) : [];
+    if (!localSems.includes(nextSem)) {
+      localSems.push(nextSem);
+      localStorage.setItem("custom_semesters", JSON.stringify(localSems));
+    }
+
+    if (!semesters.includes(nextSem)) {
+      setSemesters(s => [...s, nextSem]);
+    }
+    handleSemesterChange(nextSem);
+    setNewSemName("");
+    setShowAddSemModal(false);
+    setShowManage(true);
+    showMsg(`🎓 Switched to ${nextSem}. Add your subjects below!`, "success");
+  };
 
   // ── Add subject ───────────────────────────────────────────────────────────
   const addSubject = async () => {
@@ -105,14 +190,15 @@ export default function AttendanceTrackerPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: trimmed }),
+        body: JSON.stringify({ name: trimmed, semester: selectedSemester }),
       });
       const data = await res.json();
       if (res.ok) {
         setNewSubject("");
         await fetchSubjects();
+        await fetchSemesters();
         setForm(f => ({ ...f, subject: trimmed }));
-        showMsg(`✅ "${trimmed}" added`, "success");
+        showMsg(`✅ "${trimmed}" added to ${selectedSemester}`, "success");
       } else {
         showMsg(data.message || "Failed to add subject", "error");
       }
@@ -159,12 +245,14 @@ export default function AttendanceTrackerPage() {
           subject:     form.subject,
           hours:       Number(form.hours),
           leaveReason: form.leaveReason,
+          semester:    selectedSemester,
         }),
       });
       if (res.ok) {
         setForm(f => ({ ...f, leaveReason: "", hours: "1" }));
         await fetchAttendance();
-        showMsg("✅ Record added", "success");
+        await fetchSemesters();
+        showMsg(`✅ Record added to ${selectedSemester}`, "success");
       }
     } catch {
       showMsg("Server error", "error");
@@ -224,59 +312,15 @@ export default function AttendanceTrackerPage() {
     </div>
   );
 
-  // ── First time — no subjects ──────────────────────────────────────────────
-  if (subjects.length === 0 && !showManage) return (
-    <div className="p-4 md:p-6 min-h-screen bg-[#04040a] text-slate-200 flex flex-col items-center justify-center">
-      <div className="w-full max-w-sm text-center">
-        <div className="text-5xl mb-4 opacity-40">📚</div>
-        <h2 className="text-xl font-black text-white mb-2">No subjects yet</h2>
-        <p className="text-sm text-slate-500 mb-6">
-          Add your subjects first before tracking attendance.
-        </p>
-        <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-5">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">
-            Add your first subject
-          </p>
-
-          {msg.text && (
-            <div className={`mb-3 px-3 py-2 rounded-xl text-xs font-bold ${
-              msg.type === "success"
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "bg-red-500/10 text-red-400 border border-red-500/20"
-            }`}>{msg.text}</div>
-          )}
-
-          <div className="flex gap-2">
-            <input
-              className={inputCls}
-              placeholder="e.g. Mathematics"
-              value={newSubject}
-              onChange={e => setNewSubject(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addSubject()}
-              autoFocus
-            />
-            <button
-              onClick={addSubject}
-              disabled={!newSubject.trim() || addingSubj}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-black rounded-xl cursor-pointer transition-colors shrink-0"
-            >
-              {addingSubj ? "..." : "Add"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="p-4 md:p-6 min-h-screen bg-[#04040a] text-slate-200">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-2xl font-black text-white">Attendance</h1>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
-            Track your daily attendance
+            Track daily attendance by Semester
           </p>
         </div>
         <button
@@ -287,7 +331,33 @@ export default function AttendanceTrackerPage() {
               : "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-slate-400"
           }`}
         >
-          ⚙️ Subjects
+          ⚙️ Manage Subjects
+        </button>
+      </div>
+
+      {/* ── Semester Selector Bar ── */}
+      <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-2 mb-4 flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {semesters.map(sem => (
+            <button
+              key={sem}
+              onClick={() => handleSemesterChange(sem)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-all border ${
+                selectedSemester === sem
+                  ? "bg-violet-500/20 border-violet-500/40 text-violet-300 shadow-sm"
+                  : "bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              🎓 {sem}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setShowAddSemModal(true)}
+          className="px-3 py-1.5 rounded-xl bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold tracking-wide cursor-pointer transition-colors border-none whitespace-nowrap shrink-0 shadow"
+        >
+          + Add Next Sem
         </button>
       </div>
 
@@ -303,17 +373,19 @@ export default function AttendanceTrackerPage() {
       )}
 
       {/* ── Manage subjects ── */}
-      {showManage && (
+      {(showManage || subjects.length === 0) && (
         <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4 mb-4">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">
-            Manage Subjects
-          </p>
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+              Manage Subjects for <span className="text-violet-400 font-bold">{selectedSemester}</span>
+            </p>
+          </div>
 
-          {/* Add new */}
+          {/* Add new subject */}
           <div className="flex gap-2 mb-4">
             <input
               className={inputCls}
-              placeholder="e.g. Physics, History..."
+              placeholder={`Add subject for ${selectedSemester}... (e.g. Physics, DBMS)`}
               value={newSubject}
               onChange={e => setNewSubject(e.target.value)}
               onKeyDown={e => e.key === "Enter" && addSubject()}
@@ -329,7 +401,9 @@ export default function AttendanceTrackerPage() {
 
           {/* Subject chips */}
           {subjects.length === 0 ? (
-            <p className="text-xs text-slate-600">No subjects yet</p>
+            <p className="text-xs text-amber-400/80 font-medium">
+              ⚠️ No subjects in {selectedSemester} yet. Add subjects above to start taking attendance.
+            </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {subjects.map(s => (
@@ -357,13 +431,13 @@ export default function AttendanceTrackerPage() {
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-6">
         {[
-          { label: "Attendance",  value: `${stats.pct}%`,  color: stats.pct >= 75 ? "text-emerald-400" : "text-red-400" },
+          { label: `${selectedSemester} Attendance`, value: `${stats.pct}%`,  color: stats.pct >= 75 ? "text-emerald-400" : "text-red-400" },
           { label: "Present",     value: stats.present,     color: "text-emerald-400" },
           { label: "Absent",      value: stats.absent,      color: "text-red-400"     },
           { label: "Total Hours", value: `${stats.hours}h`, color: "text-violet-400"  },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-3.5">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 truncate">{label}</p>
             <p className={`text-xl font-black font-mono ${color}`}>{value}</p>
           </div>
         ))}
@@ -374,7 +448,7 @@ export default function AttendanceTrackerPage() {
         {/* ── Add Record ── */}
         <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
           <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
-            Add Record
+            Add Record ({selectedSemester})
           </h2>
 
           <div className="mb-3">
@@ -388,7 +462,7 @@ export default function AttendanceTrackerPage() {
             </label>
             {subjects.length === 0 ? (
               <div className="px-3 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400 font-semibold">
-                Add subjects using ⚙️ Subjects button above
+                Add subjects for {selectedSemester} above to mark attendance
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -457,19 +531,19 @@ export default function AttendanceTrackerPage() {
             disabled={!form.subject}
             className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-black uppercase tracking-widest rounded-xl cursor-pointer transition-colors mt-1"
           >
-            + Add Record
+            + Add Record ({selectedSemester})
           </button>
         </div>
 
         {/* ── Subject Stats ── */}
         <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
           <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
-            Subject-wise
+            Subject-wise ({selectedSemester})
           </h2>
           {subjectStats.length === 0 ? (
             <div className="text-center py-10">
               <div className="text-2xl mb-2 opacity-30">📚</div>
-              <p className="text-xs text-slate-600">No records yet</p>
+              <p className="text-xs text-slate-600">No records for {selectedSemester} yet</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -504,12 +578,12 @@ export default function AttendanceTrackerPage() {
       {/* ── Records List ── */}
       <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
         <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
-          All Records
+          Records ({selectedSemester})
         </h2>
         {attendance.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-2xl mb-2 opacity-30">📅</div>
-            <p className="text-xs text-slate-600">No attendance records yet</p>
+            <p className="text-xs text-slate-600">No attendance records in {selectedSemester} yet</p>
           </div>
         ) : (
           <div className="space-y-2 max-h-72 overflow-y-auto">
@@ -540,6 +614,31 @@ export default function AttendanceTrackerPage() {
           </div>
         )}
       </div>
+
+      {/* ── Add Semester Modal ── */}
+      {showAddSemModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[200] flex items-center justify-center px-4" onClick={e => e.target === e.currentTarget && setShowAddSemModal(false)}>
+          <div className="w-full max-w-sm bg-[#0d0d1a] border border-white/10 rounded-2xl p-5 shadow-2xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-white">Add Next Semester</h3>
+              <button onClick={() => setShowAddSemModal(false)} className="text-slate-400 hover:text-white border-none bg-transparent cursor-pointer">✕</button>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">Create a new semester so new subjects and attendance won't mix with previous semesters.</p>
+            <input
+              className={inputCls}
+              placeholder={`e.g. Semester ${semesters.length + 1} or Fall 2026`}
+              value={newSemName}
+              onChange={e => setNewSemName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAddNextSemester()}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowAddSemModal(false)} className="flex-1 py-2.5 rounded-xl bg-white/[0.05] text-slate-400 text-xs font-bold border-none cursor-pointer">Cancel</button>
+              <button onClick={handleAddNextSemester} className="flex-1 py-2.5 rounded-xl bg-violet-500 text-white text-xs font-bold border-none cursor-pointer hover:bg-violet-600">Create & Switch</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
