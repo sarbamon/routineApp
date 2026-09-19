@@ -8,7 +8,7 @@ import { sendOSNotification, requestPermission, updateBadge } from "../utils/pus
 
 interface NotifItem {
   _id:       string;
-  type:      "friend_request" | "friend_accepted" | "message" | "todo_reminder" | "announcement";
+  type:      "friend_request" | "friend_accepted" | "message" | "todo_reminder" | "routine_reminder" | "announcement" | "routine_share";
   title:     string;
   body:      string;
   read:      boolean;
@@ -22,19 +22,23 @@ interface PendingRequest {
 }
 
 const TYPE_ICON: Record<string, string> = {
-  friend_request:  "👋",
-  friend_accepted: "🤝",
-  message:         "💬",
-  todo_reminder:   "📋",
-  announcement:    "📢",
+  friend_request:   "👋",
+  friend_accepted:  "🤝",
+  message:          "💬",
+  todo_reminder:    "📋",
+  routine_reminder: "⏰",
+  announcement:     "📢",
+  routine_share:    "📋",
 };
 
 const TYPE_COLOR: Record<string, string> = {
-  friend_request:  "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  friend_accepted: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  message:         "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  todo_reminder:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  announcement:    "bg-red-500/10 text-red-400 border-red-500/20",
+  friend_request:   "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  friend_accepted:  "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  message:          "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  todo_reminder:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  routine_reminder: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  announcement:     "bg-red-500/10 text-red-400 border-red-500/20",
+  routine_share:    "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
 };
 
 const timeAgo = (date: string) => {
@@ -82,7 +86,7 @@ function NotifContent({ notifications, pendingRequests, activeTab, setActiveTab,
               </div>
               <div className="flex-1 min-w-0">
                 <p className={`text-xs font-bold truncate ${notif.read ? "text-slate-400" : "text-white"}`}>{notif.title}</p>
-                {notif.body && <p className="text-[10px] text-slate-500 mt-0.5 truncate">{notif.body}</p>}
+                {(notif.body || (notif as any).message) && <p className="text-[10px] text-slate-500 mt-0.5 truncate">{notif.body || (notif as any).message}</p>}
                 <p className="text-[9px] text-slate-600 mt-1 uppercase tracking-wide">{timeAgo(notif.createdAt)}</p>
               </div>
               <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -269,7 +273,7 @@ export default function NotificationBell() {
       setNotifications(prev => [notif, ...prev]);
       if (notif.type === "message") playMessageSound();
       if (["friend_request","friend_accepted","announcement","todo_reminder"].includes(notif.type)) playRequestSound();
-      sendOSNotification(notif.title, notif.body);
+      sendOSNotification(notif.title, notif.body || (notif as any).message || "");
     });
     return () => { socket.off("new_notification"); };
   }, [socket]);
@@ -326,13 +330,53 @@ export default function NotificationBell() {
     await refetchPending();
   };
 
+  const [sharedNotifModal, setSharedNotifModal] = useState<NotifItem | null>(null);
+  const [importing,        setImporting]        = useState(false);
+  const [importMsg,        setImportMsg]        = useState("");
+
   const handleNotifClick = async (notif: NotifItem) => {
     await markRead(notif._id);
     setMode("closed");
-    if (notif.type === "message")         navigate("/chat");
-    if (notif.type === "friend_request")  navigate("/chat");
-    if (notif.type === "friend_accepted") navigate("/chat");
-    if (notif.type === "todo_reminder")   navigate("/today");
+    if (notif.type === "message")          navigate("/chat");
+    if (notif.type === "friend_request")   navigate("/chat");
+    if (notif.type === "friend_accepted")  navigate("/chat");
+    if (notif.type === "todo_reminder")    navigate("/today");
+    if (notif.type === "routine_reminder") navigate("/");
+    if (notif.type === "routine_share")    setSharedNotifModal(notif);
+  };
+
+  const handleImportSharedRoutine = async () => {
+    if (!sharedNotifModal || !sharedNotifModal.data) return;
+    setImporting(true);
+    setImportMsg("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/routines/import`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          section:  sharedNotifModal.data.section,
+          routines: sharedNotifModal.data.routines,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setImportMsg(`Imported ${data.count} routine items into "${sharedNotifModal.data.section}"! 🎉`);
+        setTimeout(() => {
+          setSharedNotifModal(null);
+          setImportMsg("");
+          navigate("/");
+        }, 1800);
+      }
+    } catch {
+      setImportMsg("Failed to import routines.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const sharedProps = {
@@ -378,6 +422,59 @@ export default function NotificationBell() {
       {/* Full page (double tap or ⤢ button) */}
       {mode === "full" && (
         <NotifFullPage {...sharedProps} />
+      )}
+
+      {/* Shared Routine Import Modal */}
+      {sharedNotifModal && sharedNotifModal.data && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-[110] backdrop-blur-sm" onClick={() => setSharedNotifModal(null)} />
+          <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] pointer-events-auto p-5">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
+                <div>
+                  <h3 className="text-sm font-black text-white">📋 Shared Routine Preview</h3>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
+                    From {sharedNotifModal.data.senderUsername || "a friend"} • Section: "{sharedNotifModal.data.section}"
+                  </p>
+                </div>
+                <button onClick={() => setSharedNotifModal(null)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer">
+                  ✕
+                </button>
+              </div>
+
+              {importMsg && (
+                <div className="mb-3 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold">
+                  {importMsg}
+                </div>
+              )}
+
+              <div className="max-h-48 overflow-y-auto space-y-2 mb-4 pr-1">
+                {Array.isArray(sharedNotifModal.data.routines) && sharedNotifModal.data.routines.map((r: any, idx: number) => (
+                  <div key={idx} className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-white">{r.activity}</p>
+                      {r.notes && <p className="text-[10px] text-slate-500">{r.notes}</p>}
+                    </div>
+                    <div className="text-right shrink-0 ml-2">
+                      <span className="text-[10px] font-mono text-emerald-400">{r.time}</span>
+                      {r.duration && <p className="text-[9px] text-slate-500">{r.duration}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={handleImportSharedRoutine}
+                disabled={importing}
+                className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
+                  importing ? "bg-slate-800 text-slate-600 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)]"
+                }`}
+              >
+                {importing ? "Importing..." : `📥 Import ${sharedNotifModal.data.routines?.length || 0} Items to My Routine`}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

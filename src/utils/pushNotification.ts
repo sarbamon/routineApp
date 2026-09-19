@@ -6,12 +6,14 @@ export const requestPermission = async (): Promise<boolean> => {
   return result === "granted";
 };
 
-export const sendOSNotification = (title: string, body: string, icon = "/pwa-192x192.png") => {
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-  // Only send if tab is not focused
-  if (document.visibilityState === "visible") return;
-  new Notification(title, { body, icon });
+export const sendOSNotification = (title: string, body: string, icon = "/icon-192.png") => {
+  try {
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    new Notification(title, { body, icon });
+  } catch (err) {
+    console.error("OS Notification error:", err);
+  }
 };
 
 // Update PWA badge count

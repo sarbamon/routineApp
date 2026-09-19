@@ -9,7 +9,7 @@ import { sendOSNotification, updateBadge, requestPermission } from "../utils/pus
 
 interface NotifItem {
   _id:       string;
-  type:      "friend_request" | "friend_accepted" | "message" | "todo_reminder";
+  type:      "friend_request" | "friend_accepted" | "message" | "todo_reminder" | "routine_reminder" | "announcement" | "routine_share";
   title:     string;
   body:      string;
   read:      boolean;
@@ -72,10 +72,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       if (notif.type === "message") playMessageSound();
       if (notif.type === "friend_request") playRequestSound();
-      if (notif.type === "todo_reminder") playTodoSound();
+      if (notif.type === "todo_reminder" || notif.type === "routine_reminder") playTodoSound();
       if (notif.type === "friend_accepted") playRequestSound();
 
-      sendOSNotification(notif.title, notif.body);
+      sendOSNotification(notif.title, notif.body || (notif as any).message || "");
     });
 
     return () => { socket.off("new_notification"); };

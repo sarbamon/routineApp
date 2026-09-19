@@ -1,26 +1,46 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { API_URL } from "../config/api";
 
 type Props = {
   onAdd?: () => void;
+  existingSections?: string[];
+  initialSection?: string;
 };
 
 const inputCls = "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-[13px] outline-none focus:border-emerald-500/40 transition-colors";
 
-const SECTIONS  = ["Home", "Hostel - No Class", "Hostel - With Class"];
-const DURATIONS = ["15 min", "30 min", "45 min", "1 Hour", "1.5 Hours", "2 Hours", "3 Hours", "4 Hours"];
+const DEFAULT_SECTIONS = ["Home", "Hostel - No Class", "Hostel - With Class"];
+const DURATIONS        = ["15 min", "30 min", "45 min", "1 Hour", "1.5 Hours", "2 Hours", "3 Hours", "4 Hours"];
 
-function AddRoutineForm({ onAdd }: Props) {
+function AddRoutineForm({ onAdd, existingSections = [], initialSection = "Home" }: Props) {
   const [formData, setFormData] = useState({
-    section:  "Home",
+    section:  initialSection,
     time:     "",
     activity: "",
     duration: "",
     notes:    "",
   });
-  const [message, setMessage] = useState("");
-  const [error,   setError]   = useState("");
-  const [loading, setLoading] = useState(false);
+  const [isCustomSection, setIsCustomSection] = useState(false);
+  const [customSection,   setCustomSection]   = useState("");
+  const [message,          setMessage]          = useState("");
+  const [error,            setError]            = useState("");
+  const [loading,          setLoading]          = useState(false);
+
+  // Combine default and existing unique sections
+  const allSections = Array.from(new Set([...DEFAULT_SECTIONS, ...existingSections]));
+
+  useEffect(() => {
+    if (initialSection) {
+      if (allSections.includes(initialSection)) {
+        setFormData(f => ({ ...f, section: initialSection }));
+        setIsCustomSection(false);
+      } else {
+        setFormData(f => ({ ...f, section: "__custom__" }));
+        setIsCustomSection(true);
+        setCustomSection(initialSection);
+      }
+    }
+  }, [initialSection]);
 
   // Generate time options every 15 min
   const timeOptions: string[] = [];
@@ -35,9 +55,26 @@ function AddRoutineForm({ onAdd }: Props) {
 
   const set = (k: string, v: string) => setFormData(f => ({ ...f, [k]: v }));
 
+  const handleSectionChange = (val: string) => {
+    if (val === "__custom__") {
+      setIsCustomSection(true);
+      set("section", "__custom__");
+    } else {
+      setIsCustomSection(false);
+      set("section", val);
+    }
+  };
+
   const handleAdd = async () => {
     setMessage("");
     setError("");
+
+    const finalSection = isCustomSection ? customSection.trim() : formData.section;
+
+    if (!finalSection) {
+      setError("Please specify a section name");
+      return;
+    }
 
     if (!formData.time || !formData.activity.trim()) {
       setError("Time and Activity are required");
@@ -46,21 +83,26 @@ function AddRoutineForm({ onAdd }: Props) {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res   = await fetch(`${API_URL}/api/routines`, {
+      const token   = localStorage.getItem("token");
+      const payload = {
+        ...formData,
+        section: finalSection,
+      };
+
+      const res = await fetch(`${API_URL}/api/routines`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (res.ok) {
         setMessage("Routine added ✅");
-        setFormData({ section: "Home", time: "", activity: "", duration: "", notes: "" });
+        setFormData({ section: finalSection, time: "", activity: "", duration: "", notes: "" });
         onAdd?.();
         setTimeout(() => setMessage(""), 3000);
       } else {
@@ -96,9 +138,19 @@ function AddRoutineForm({ onAdd }: Props) {
           <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
             Section
           </label>
-          <select className={inputCls} value={formData.section} onChange={e => set("section", e.target.value)}>
-            {SECTIONS.map(s => <option key={s} className="bg-[#0d0d1a]">{s}</option>)}
+          <select className={inputCls} value={isCustomSection ? "__custom__" : formData.section} onChange={e => handleSectionChange(e.target.value)}>
+            {allSections.map(s => <option key={s} value={s} className="bg-[#0d0d1a]">{s}</option>)}
+            <option value="__custom__" className="bg-[#0d0d1a] text-emerald-400 font-bold">+ Custom Section...</option>
           </select>
+
+          {isCustomSection && (
+            <input
+              className={`${inputCls} mt-2 border-emerald-500/40`}
+              placeholder="e.g. Work, Gym, Study"
+              value={customSection}
+              onChange={e => setCustomSection(e.target.value)}
+            />
+          )}
         </div>
 
         {/* Time */}
