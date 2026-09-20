@@ -54,15 +54,10 @@ export const sendOSNotification = async (title: string, body: string, icon = "/i
   }
 };
 
-interface NavigatorBadge extends Navigator {
-  setAppBadge?: (count: number) => Promise<void>;
-  clearAppBadge?: () => Promise<void>;
-}
-
 // Update PWA badge count
 export const updateBadge = async (count: number) => {
   try {
-    const nav = navigator as NavigatorBadge;
+    const nav = navigator as any;
 
     if ("setAppBadge" in nav) {
       if (count > 0) {
