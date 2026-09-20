@@ -2,10 +2,11 @@ import { useState } from "react";
 import { API_URL } from "./config/api";
 
 type Props = {
-  onLogin: (username: string) => void;
+  onLogin?: (username: string) => void;
+  onLoginSuccess?: (username: string, token: string) => void;
 };
 
-export default function Login({ onLogin }: Props) {
+export default function Login({ onLogin, onLoginSuccess }: Props) {
 
   const [username,setUsername] = useState("");
   const [email,setEmail] = useState("");
@@ -59,7 +60,10 @@ export default function Login({ onLogin }: Props) {
           localStorage.setItem("token",data.token);
           localStorage.setItem("username", username);
           setMessage("Login successful ✅");
-          setTimeout(()=>{onLogin(username);},1000);
+          setTimeout(() => {
+            if (onLoginSuccess) onLoginSuccess(username, data.token || "");
+            else if (onLogin) onLogin(username);
+          }, 1000);
         }
       } else { 
         setError(data.message || (isSignUp ? "Registration failed" : "Login failed"));

@@ -2,6 +2,19 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ALL_PAGES, usePagesContext } from "../context/PagesContext";
 import { API_URL } from "../config/api";
+import { CalendarDays, CheckSquare, Activity, Wallet, GraduationCap, BarChart3 } from "lucide-react";
+
+function renderPageIcon(iconName: string) {
+  switch (iconName) {
+    case "CalendarDays": return <CalendarDays className="w-5 h-5 text-emerald-400" />;
+    case "CheckSquare": return <CheckSquare className="w-5 h-5 text-emerald-400" />;
+    case "Activity": return <Activity className="w-5 h-5 text-emerald-400" />;
+    case "Wallet": return <Wallet className="w-5 h-5 text-emerald-400" />;
+    case "GraduationCap": return <GraduationCap className="w-5 h-5 text-emerald-400" />;
+    case "BarChart3": return <BarChart3 className="w-5 h-5 text-emerald-400" />;
+    default: return <CalendarDays className="w-5 h-5 text-emerald-400" />;
+  }
+}
 
 const APP_VERSION = "1.0.0";
 
@@ -319,7 +332,7 @@ const [showPages, setShowPages] = useState(false);
                   </svg>
                 )}
               </div>
-              <span className="text-lg shrink-0">{page.emoji}</span>
+              <span className="shrink-0">{renderPageIcon(page.iconName)}</span>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-bold ${isOn ? "text-white" : "text-slate-500"}`}>
                   {page.label}

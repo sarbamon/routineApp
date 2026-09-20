@@ -8,6 +8,21 @@ import { NotificationProvider }  from "./context/NotificationContext";
 import NotificationBell          from "./components/NotificationBell";
 import { unlockAudio }           from "./utils/sound";
 
+import { 
+  Home, 
+  CalendarDays, 
+  CheckSquare, 
+  Activity, 
+  Wallet, 
+  GraduationCap, 
+  BarChart3, 
+  User, 
+  Settings, 
+  ShieldCheck, 
+  Layers,
+  Menu
+} from "lucide-react";
+
 import OnboardingPage        from "./pages/OnboardingPage";
 import HomePage              from "./pages/HomePage";
 import RoutinePage           from "./pages/RoutinePage";
@@ -15,12 +30,26 @@ import TodayPage             from "./pages/TodayPage";
 import MonthlyReportPage     from "./pages/MonthlyReportPage";
 import MoneyTrackerPage      from "./pages/MoneyTrackerPage";
 import AttendanceTrackerPage from "./pages/AttendanceTrackerPage";
+import HealthPage            from "./pages/HealthPage";
 import SettingsPage          from "./pages/SettingsPage";
 import AdminPage             from "./pages/AdminPage";
 import ProfilePage           from "./pages/ProfilePage";
-import BottomNav             from "./components/BottomNav";;
+import BottomNav             from "./components/BottomNav";
 
 const ADMIN = "sarbamon";
+
+const ICON_MAP: Record<string, any> = {
+  home:       Home,
+  routine:    CalendarDays,
+  today:      CheckSquare,
+  health:     Activity,
+  money:      Wallet,
+  attendance: GraduationCap,
+  monthly:    BarChart3,
+  profile:    User,
+  settings:   Settings,
+  admin:      ShieldCheck,
+};
 
 // ── Inner app ─────────────────────────────────────────────────────────────────
 function InnerApp({ username, onLogout }: { username: string; onLogout: () => void }) {
@@ -29,23 +58,24 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
 
   if (loading) return (
     <div className="min-h-screen bg-[#04040a] flex items-center justify-center">
-      <p className="text-slate-500 text-sm">Loading...</p>
+      <div className="w-7 h-7 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
     </div>
   );
 
   if (isNew) return <OnboardingPage />;
 
   const NAV_LINKS = [
-    { to: "/home", label: "🏠 Home" },
+    { to: "/home", label: "Home", pageId: "home" },
     ...ALL_PAGES
       .filter(p => enabledPages.includes(p.id))
       .map(p => ({
         to:    p.id === "routine" ? "/" : `/${p.id}`,
-        label: `${p.emoji} ${p.label}`,
+        label: p.label,
+        pageId: p.id,
       })),
-    { to: "/profile",       label: "👤 Profile"       },
-    { to: "/settings",      label: "⚙️ Settings"      },
-    ...(username === ADMIN ? [{ to: "/admin", label: "👑 Admin" }] : []),
+    { to: "/profile",  label: "Profile",  pageId: "profile"  },
+    { to: "/settings", label: "Settings", pageId: "settings" },
+    ...(username === ADMIN ? [{ to: "/admin", label: "Admin", pageId: "admin" }] : []),
   ];
 
   return (
@@ -71,8 +101,8 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         {/* Logo */}
         <div className="px-6 pt-6 pb-4 border-b border-white/5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-sm">
-              🤖
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <Layers className="w-4 h-4 text-emerald-400" />
             </div>
             <h2 className="text-lg font-black text-white">
               Akieme <span className="text-emerald-400">One</span>
@@ -82,16 +112,20 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
 
         {/* Nav links */}
         <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1 overflow-y-auto">
-          {NAV_LINKS.map(({ to, label }) => (
-            <Link
-              key={to}
-              to={to}
-              onClick={() => setMenuOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
-            >
-              {label}
-            </Link>
-          ))}
+          {NAV_LINKS.map(({ to, label, pageId }) => {
+            const Icon = ICON_MAP[pageId] || Home;
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-sm font-medium flex items-center gap-3"
+              >
+                <Icon className="w-4 h-4 text-emerald-400/80 shrink-0" />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* User card */}
@@ -135,9 +169,9 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0d0d1a] border-b border-white/5 shrink-0">
           <button
             onClick={() => setMenuOpen(true)}
-            className="text-slate-400 hover:text-white transition-colors text-xl leading-none"
+            className="text-slate-400 hover:text-white transition-colors text-xl leading-none flex items-center justify-center cursor-pointer"
           >
-            ☰
+            <Menu className="w-5 h-5 text-slate-300" />
           </button>
 
           <span className="font-black text-white">
@@ -159,7 +193,7 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
         {/* ── Desktop top bar ── */}
         <div className="hidden md:flex items-center justify-between px-6 py-3 bg-[#0d0d1a] border-b border-white/5 shrink-0">
           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-            Dashboard
+            Dashboard Workspace
           </p>
           {username && (
             <div className="flex items-center gap-3">
@@ -189,6 +223,7 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
 
             {enabledPages.includes("routine")    && <Route path="/"           element={<RoutinePage />}           />}
             {enabledPages.includes("today")      && <Route path="/today"      element={<TodayPage />}             />}
+            {enabledPages.includes("health")     && <Route path="/health"     element={<HealthPage />}            />}
             {enabledPages.includes("money")      && <Route path="/money"      element={<MoneyTrackerPage />}      />}
             {enabledPages.includes("attendance") && <Route path="/attendance" element={<AttendanceTrackerPage />} />}
             {enabledPages.includes("monthly")    && <Route path="/monthly"    element={<MonthlyReportPage />}     />}
@@ -196,6 +231,7 @@ function InnerApp({ username, onLogout }: { username: string; onLogout: () => vo
           </Routes>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }
@@ -205,7 +241,6 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
   const [username,   setUsername]   = useState(localStorage.getItem("username") || "");
 
-  // ── Unlock audio on first user interaction ────────────────────────────────
   useEffect(() => {
     const unlock = () => {
       unlockAudio();
@@ -224,82 +259,36 @@ function App() {
     };
   }, []);
 
-  // ── Auto logout if inactive for 12 hours ──────────────────────────────────
-  useEffect(() => {
-    if (!isLoggedIn) return;
-
-    const updateActivity = () => {
-      localStorage.setItem("lastActivity", Date.now().toString());
-    };
-
-    // Initialize lastActivity timestamp if not set
-    if (!localStorage.getItem("lastActivity")) {
-      updateActivity();
-    }
-
-    // Add global activity listeners
-    window.addEventListener("click", updateActivity);
-    window.addEventListener("keydown", updateActivity);
-    window.addEventListener("scroll", updateActivity, { passive: true });
-    window.addEventListener("mousemove", updateActivity);
-    window.addEventListener("touchstart", updateActivity, { passive: true });
-
-    // Periodically check for inactivity (every 30 seconds)
-    const checkInterval = setInterval(() => {
-      const lastActivity = localStorage.getItem("lastActivity");
-      if (lastActivity) {
-        const diff = Date.now() - parseInt(lastActivity, 10);
-        const twelveHoursMs = 12 * 60 * 60 * 1000;
-        if (diff > twelveHoursMs) {
-          handleLogout();
-        }
-      } else {
-        updateActivity();
-      }
-    }, 30000);
-
-    return () => {
-      window.removeEventListener("click", updateActivity);
-      window.removeEventListener("keydown", updateActivity);
-      window.removeEventListener("scroll", updateActivity);
-      window.removeEventListener("mousemove", updateActivity);
-      window.removeEventListener("touchstart", updateActivity);
-      clearInterval(checkInterval);
-    };
-  }, [isLoggedIn]);
+  const handleLoginSuccess = (u: string, t: string) => {
+    localStorage.setItem("token",    t);
+    localStorage.setItem("username", u);
+    setUsername(u);
+    setIsLoggedIn(true);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
-    localStorage.removeItem("lastActivity");
     setIsLoggedIn(false);
     setUsername("");
   };
 
   if (!isLoggedIn) {
-    return (
-      <Login
-        onLogin={(name: string) => {
-          setUsername(name);
-          setIsLoggedIn(true);
-        }}
-      />
-    );
+    return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
   return (
-    <PagesProvider>
+    <BrowserRouter>
       <SocketProvider>
-        <FriendsProvider>
-          <NotificationProvider>
-            <BrowserRouter>
+        <NotificationProvider>
+          <FriendsProvider>
+            <PagesProvider>
               <InnerApp username={username} onLogout={handleLogout} />
-              <BottomNav />
-            </BrowserRouter>
-          </NotificationProvider>
-        </FriendsProvider>
+            </PagesProvider>
+          </FriendsProvider>
+        </NotificationProvider>
       </SocketProvider>
-    </PagesProvider>
+    </BrowserRouter>
   );
 }
 

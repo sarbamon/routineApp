@@ -2,11 +2,12 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { API_URL } from "../config/api";
 
 export const ALL_PAGES = [
-  { id: "routine",    label: "Routine",        emoji: "👩🏻‍💻", desc: "Daily schedule & habits"     },
-  { id: "today",      label: "Today",          emoji: "📋", desc: "Tasks & reminders"           },
-  { id: "money",      label: "Money Tracker",  emoji: "💰", desc: "Income, expenses & goals"    },
-  { id: "attendance", label: "Attendance",     emoji: "📚", desc: "Track classes & subjects"    },
-  { id: "monthly",    label: "Monthly Report", emoji: "📅", desc: "Reports from all your pages" }
+  { id: "routine",    label: "Routine",        iconName: "CalendarDays",   desc: "Daily schedule & habits"     },
+  { id: "today",      label: "Today",          iconName: "CheckSquare font-medium",    desc: "Tasks & reminders"           },
+  { id: "health",     label: "Health & Photos",iconName: "Activity",        desc: "Track health, meals, reports & share photos" },
+  { id: "money",      label: "Money Tracker",  iconName: "Wallet",          desc: "Income, expenses & goals"    },
+  { id: "attendance", label: "Attendance",     iconName: "GraduationCap font-medium",   desc: "Track classes & subjects"    },
+  { id: "monthly",    label: "Monthly Report", iconName: "BarChart3 font-medium",      desc: "Reports from all your pages" }
 ];
 
 interface PagesContextType {
@@ -59,9 +60,10 @@ export function PagesProvider({ children }: { children: ReactNode }) {
   };
 
   const togglePage = (id: string) => {
-    setEnabledPages(prev =>
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
+    const next = enabledPages.includes(id)
+      ? enabledPages.filter(p => p !== id)
+      : [...enabledPages, id];
+    savePages(next);
   };
 
   return (
@@ -71,8 +73,8 @@ export function PagesProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export const usePagesContext = () => {
+export function usePagesContext() {
   const ctx = useContext(PagesContext);
   if (!ctx) throw new Error("usePagesContext must be used within PagesProvider");
   return ctx;
-};
+}

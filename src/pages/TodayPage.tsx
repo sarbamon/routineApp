@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { API_URL } from "../config/api";
 import { useFriends } from "../context/FriendsContext";
 import { useSocket } from "../context/SocketContext";
+import { Share2, Trash2, Edit3, Clock, Pin, Flame } from "lucide-react";
 
 interface Todo {
   id: number;
@@ -229,9 +230,14 @@ export default function TodayPage() {
     save(updated);
   };
 
+  const noteTimeoutRef = useRef<any>(null);
+
   const updateNote = (n: string) => {
     setNote(n);
-    save(allTodos, n);
+    if (noteTimeoutRef.current) clearTimeout(noteTimeoutRef.current);
+    noteTimeoutRef.current = setTimeout(() => {
+      save(allTodos, n);
+    }, 600);
   };
 
   const openNewList = () => {
@@ -311,7 +317,7 @@ export default function TodayPage() {
             onClick={() => setShowShareModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-xl hover:bg-violet-500/20 transition-all cursor-pointer"
           >
-            <span>🔗</span> Share List & Tasks
+            <Share2 className="w-3.5 h-3.5" /> Share List & Tasks
           </button>
         </div>
       </div>
@@ -375,8 +381,8 @@ export default function TodayPage() {
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                     {selectedDate === today ? "Today's Progress" : new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" })}
                   </span>
-                  <span className={`text-[11px] font-black ${datePct === 100 ? "text-emerald-400" : "text-slate-400"}`}>
-                    {dateDone}/{dateTodos.length} {datePct === 100 && "🔥"}
+                  <span className={`text-[11px] font-black ${datePct === 100 ? "text-emerald-400 flex items-center gap-1" : "text-slate-400"}`}>
+                    {dateDone}/{dateTodos.length} {datePct === 100 && <Flame className="w-3.5 h-3.5 text-emerald-400 inline" />}
                   </span>
                 </div>
                 <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -453,10 +459,10 @@ export default function TodayPage() {
           <div className="fixed z-[9999] w-36 bg-[#1a1a2e] border border-white/[0.12] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] overflow-hidden"
                style={{ top: menuPos.top, left: menuPos.left }}>
             <button onClick={() => { const list = lists.find(l => l.id === showListMenu); if(list) openEditList(list); }}
-              className="w-full text-left px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/[0.06] cursor-pointer border-none bg-transparent">✏️ Edit</button>
+              className="w-full text-left px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/[0.06] cursor-pointer border-none bg-transparent flex items-center gap-1.5"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
             {showListMenu !== "personal" && (
               <button onClick={() => deleteList(showListMenu)}
-                className="w-full text-left px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer border-none bg-transparent">🗑️ Delete</button>
+                className="w-full text-left px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer border-none bg-transparent flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
             )}
           </div>
         </>
@@ -522,7 +528,7 @@ export default function TodayPage() {
                     <span className="flex-1 text-sm text-slate-200 break-words">{todo.text}</span>
                     {todo.time && (
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shrink-0 flex items-center gap-1">
-                        ⏰ {todo.time}
+                        <Clock className="w-3 h-3 text-emerald-400" /> {todo.time}
                       </span>
                     )}
                     <button onClick={() => deleteTodo(todo.id)} className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
@@ -536,11 +542,11 @@ export default function TodayPage() {
                         <button onClick={() => toggleTodo(todo.id)} className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 cursor-pointer" style={{ background: currentList?.color || "#10b981" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg></button>
                         <span className="flex-1 text-sm text-slate-500 line-through break-words">{todo.text}</span>
                         {todo.time && (
-                          <span className="text-[10px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg shrink-0">
-                            ⏰ {todo.time}
+                          <span className="text-[10px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg shrink-0 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-500" /> {todo.time}
                           </span>
                         )}
-                        <button onClick={() => deleteTodo(todo.id)} className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+                        <button onClick={() => deleteTodo(todo.id)} className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M14 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
                       </div>
                     ))}
                   </>
@@ -563,7 +569,7 @@ export default function TodayPage() {
       {/* Reminder / Notes */}
       <div className="px-4">
         <div className="bg-[#0d0d1a] border border-white/[0.06] rounded-2xl overflow-hidden">
-          <div className="px-4 pt-4 pb-2 border-b border-white/[0.04] flex items-center gap-2"><span className="text-base">📌</span><div><p className="text-sm font-black text-white">Reminder / Notes</p><p className="text-[9px] text-slate-600 uppercase tracking-widest">Saved automatically</p></div></div>
+          <div className="px-4 pt-4 pb-2 border-b border-white/[0.04] flex items-center gap-2"><Pin className="w-4 h-4 text-emerald-400" /><div><p className="text-sm font-black text-white">Reminder / Notes</p><p className="text-[9px] text-slate-600 uppercase tracking-widest">Saved automatically</p></div></div>
           <textarea className="w-full bg-transparent px-4 py-3 text-sm text-slate-300 outline-none resize-none placeholder:text-slate-600 min-h-[140px]" placeholder="Write your reminders..." value={note} onChange={e => updateNote(e.target.value)} />
         </div>
       </div>

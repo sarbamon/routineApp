@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Akieme Routine</string>
+    <string name="title_activity_main">Akieme Routine</string>
+    <string name="package_name">com.akieme.routine</string>
+    <string name="custom_url_scheme">com.akieme.routine</string>
+</resources>

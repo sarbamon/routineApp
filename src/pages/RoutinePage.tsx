@@ -5,6 +5,7 @@ import { API_URL } from "../config/api";
 import { Routine } from "../types/Routine";
 import { useFriends } from "../context/FriendsContext";
 import { useSocket } from "../context/SocketContext";
+import { Share2, Trash2, Users, ClipboardList, Plus } from "lucide-react";
 
 const DEFAULT_SECTIONS = ["Home", "Hostel - No Class", "Hostel - With Class"];
 
@@ -249,7 +250,7 @@ function RoutinePage() {
               </p>
               {filteredRoutines.some(r => r.isShared) && (
                 <span className="px-2 py-0.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[9px] font-bold rounded-md flex items-center gap-1">
-                  👥 Shared by @{filteredRoutines.find(r => r.isShared)?.ownerUsername}
+                  <Users className="w-3 h-3" /> Shared by @{filteredRoutines.find(r => r.isShared)?.ownerUsername}
                 </span>
               )}
             </div>
@@ -264,14 +265,14 @@ function RoutinePage() {
                 onClick={() => setShowShareModal(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-xl hover:bg-violet-500/20 transition-all cursor-pointer"
               >
-                <span>🔗</span> Share Section & Edit Access
+                <Share2 className="w-3.5 h-3.5" /> Share Section & Edit Access
               </button>
             )}
             <button
               onClick={() => handleDeleteSection(selectedSection)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl hover:bg-red-500/20 transition-all cursor-pointer"
             >
-              <span>🗑️</span> Delete Section
+              <Trash2 className="w-3.5 h-3.5" /> Delete Section
             </button>
           </div>
         </div>
@@ -281,16 +282,16 @@ function RoutinePage() {
             <p className="text-xs text-slate-600">Loading routines...</p>
           </div>
         ) : filteredRoutines.length === 0 ? (
-          <div className="text-center py-10">
-            <div className="text-3xl mb-3 opacity-30">📋</div>
+          <div className="text-center py-10 flex flex-col items-center justify-center">
+            <ClipboardList className="w-8 h-8 text-slate-600 mb-2 opacity-40" />
             <p className="text-xs text-slate-600">
               No routines for "{selectedSection}" yet.
             </p>
             <button
               onClick={() => setShowModal(true)}
-              className="mt-3 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              className="mt-3 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl hover:bg-emerald-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              + Add your first routine
+              <Plus className="w-3.5 h-3.5" /> Add your first routine
             </button>
           </div>
         ) : (

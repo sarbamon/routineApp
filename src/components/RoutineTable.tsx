@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { API_URL } from "../config/api";
 import { Routine } from "../types/Routine";
+import { ClipboardList } from "lucide-react";
 
 type Props = {
   routines:   Routine[];
@@ -79,8 +80,8 @@ function RoutineTable({ routines, onRefresh }: Props) {
 
   if (routines.length === 0) {
     return (
-      <div className="text-center py-10">
-        <div className="text-3xl mb-3 opacity-30">📋</div>
+      <div className="text-center py-10 flex flex-col items-center justify-center">
+        <ClipboardList className="w-8 h-8 text-slate-600 mb-2 opacity-40" />
         <p className="text-xs text-slate-600">No routines yet. Add one above.</p>
       </div>
     );

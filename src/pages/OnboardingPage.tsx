@@ -1,5 +1,18 @@
 import { useState } from "react";
 import { ALL_PAGES, usePagesContext } from "../context/PagesContext";
+import { CalendarDays, CheckSquare, Activity, Wallet, GraduationCap, BarChart3, Sparkles } from "lucide-react";
+
+function renderPageIcon(iconName: string) {
+  switch (iconName) {
+    case "CalendarDays": return <CalendarDays className="w-5 h-5 text-emerald-400" />;
+    case "CheckSquare": return <CheckSquare className="w-5 h-5 text-emerald-400" />;
+    case "Activity": return <Activity className="w-5 h-5 text-emerald-400" />;
+    case "Wallet": return <Wallet className="w-5 h-5 text-emerald-400" />;
+    case "GraduationCap": return <GraduationCap className="w-5 h-5 text-emerald-400" />;
+    case "BarChart3": return <BarChart3 className="w-5 h-5 text-emerald-400" />;
+    default: return <CalendarDays className="w-5 h-5 text-emerald-400" />;
+  }
+}
 
 export default function OnboardingPage() {
   const { savePages } = usePagesContext();
@@ -32,8 +45,8 @@ export default function OnboardingPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-4 text-2xl">
-            👋
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-4">
+            <Sparkles className="w-7 h-7 text-emerald-400" />
           </div>
           <h1 className="text-2xl font-black text-white mb-2">
             Welcome, <span className="text-emerald-400 capitalize">{username}</span>!
@@ -72,7 +85,7 @@ export default function OnboardingPage() {
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 ${
                   isOn ? "bg-emerald-500/10" : "bg-white/[0.04]"
                 }`}>
-                  {page.emoji}
+                  {renderPageIcon(page.iconName)}
                 </div>
 
                 {/* Label */}
