@@ -7,6 +7,7 @@ interface Todo {
   completed: boolean;
   date: string;
   listId: string;
+  time?: string;
 }
 
 interface TodoList {
@@ -47,6 +48,7 @@ export default function TodayPage() {
   const [lists,         setLists]        = useState<TodoList[]>([DEFAULT_LIST]);
   const [activeList,    setActiveList]   = useState("personal");
   const [todoInput,     setTodoInput]    = useState("");
+  const [timeInput,     setTimeInput]    = useState("");
   const [note,          setNote]         = useState("");
   const [loading,       setLoading]      = useState(true);
   const [saving,        setSaving]       = useState(false);
@@ -134,10 +136,12 @@ const saveLists = async (updatedLists: TodoList[]) => {
       completed: false,
       date: effectiveDate,
       listId: activeList,
+      time: timeInput || undefined,
     };
     const updated = [...allTodos, newTodo];
     setAllTodos(updated);
     setTodoInput("");
+    setTimeInput("");
     save(updated);
     inputRef.current?.focus();
   };
@@ -399,6 +403,11 @@ const saveLists = async (updatedLists: TodoList[]) => {
                   <div key={todo.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] group">
                     <button onClick={() => toggleTodo(todo.id)} className="w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 cursor-pointer transition-all hover:scale-110" style={{ borderColor: (currentList?.color || "#10b981") + "70" }} />
                     <span className="flex-1 text-sm text-slate-200 break-words">{todo.text}</span>
+                    {todo.time && (
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shrink-0 flex items-center gap-1">
+                        ⏰ {todo.time}
+                      </span>
+                    )}
                     <button onClick={() => deleteTodo(todo.id)} className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
                   </div>
                 ))}
@@ -409,6 +418,11 @@ const saveLists = async (updatedLists: TodoList[]) => {
                       <div key={todo.id} className="flex items-center gap-3 p-2.5 rounded-xl opacity-40 group">
                         <button onClick={() => toggleTodo(todo.id)} className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 cursor-pointer" style={{ background: currentList?.color || "#10b981" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg></button>
                         <span className="flex-1 text-sm text-slate-500 line-through break-words">{todo.text}</span>
+                        {todo.time && (
+                          <span className="text-[10px] font-mono text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg shrink-0">
+                            ⏰ {todo.time}
+                          </span>
+                        )}
                         <button onClick={() => deleteTodo(todo.id)} className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
                       </div>
                     ))}
@@ -418,9 +432,12 @@ const saveLists = async (updatedLists: TodoList[]) => {
             )}
           </div>
           <div className="px-4 pb-4 pt-2 border-t border-white/[0.04]">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input ref={inputRef} className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-slate-200 text-sm outline-none transition-colors" placeholder={`Add to ${currentList?.name || "list"}...`} value={todoInput} onChange={e => setTodoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} />
-              <button onClick={addTodo} disabled={!todoInput.trim()} className="px-4 py-2.5 text-white text-sm font-black rounded-xl cursor-pointer border-none disabled:bg-slate-800 disabled:text-slate-600" style={{ background: todoInput.trim() ? (currentList?.color || "#10b981") : undefined }}>Add</button>
+              <div className="flex gap-2 shrink-0">
+                <input type="time" title="Set optional reminder time" className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-2.5 py-2 text-slate-200 text-xs outline-none focus:border-emerald-500/40 transition-colors" value={timeInput} onChange={e => setTimeInput(e.target.value)} />
+                <button onClick={addTodo} disabled={!todoInput.trim()} className="px-4 py-2.5 text-white text-sm font-black rounded-xl cursor-pointer border-none disabled:bg-slate-800 disabled:text-slate-600 shrink-0" style={{ background: todoInput.trim() ? (currentList?.color || "#10b981") : undefined }}>Add</button>
+              </div>
             </div>
           </div>
         </div>
