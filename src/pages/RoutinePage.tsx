@@ -4,6 +4,7 @@ import RoutineTable from "../components/RoutineTable";
 import { API_URL } from "../config/api";
 import { Routine } from "../types/Routine";
 import { useFriends } from "../context/FriendsContext";
+import { useSocket } from "../context/SocketContext";
 
 const DEFAULT_SECTIONS = ["Home", "Hostel - No Class", "Hostel - With Class"];
 
@@ -21,6 +22,7 @@ function RoutinePage() {
   const [shareErr,        setShareErr]        = useState("");
 
   const { friends } = useFriends();
+  const { socket }  = useSocket();
 
   const fetchRoutines = async () => {
     const token = localStorage.getItem("token");
@@ -51,16 +53,74 @@ function RoutinePage() {
     };
 
     window.addEventListener("routine_updated", handleRoutineUpdated);
+
+    if (socket) {
+      socket.on("routine_updated", (data: any) => {
+        fetchRoutines();
+        if (data && data.section) {
+          // Keep live sync active
+        }
+      });
+    }
+
     return () => {
       window.removeEventListener("routine_updated", handleRoutineUpdated);
+      if (socket) {
+        socket.off("routine_updated");
+      }
     };
-  }, []);
+  }, [socket]);
+
+  const [deletedSections, setDeletedSections] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("deleted_sections");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Compute all unique sections (defaults + custom sections from routines)
   const existingSections = Array.from(new Set(routines.map(r => r.section).filter(Boolean)));
-  const allSections      = Array.from(new Set([...DEFAULT_SECTIONS, ...existingSections]));
+  const rawSections      = Array.from(new Set([...DEFAULT_SECTIONS, ...existingSections]));
+  const allSections      = rawSections.filter(s => !deletedSections.includes(s));
 
   const filteredRoutines = routines.filter(r => r.section === selectedSection);
+
+  // Check if current section is collaborative (shared or created by a friend)
+  const isCollaborativeSection = filteredRoutines.some(r => r.isShared || (r.sharedWithUsernames && r.sharedWithUsernames.length > 0));
+  const collaborators = Array.from(new Set(
+    filteredRoutines.flatMap(r => [r.ownerUsername, ...(r.sharedWithUsernames || [])]).filter(Boolean)
+  ));
+
+  const handleDeleteSection = async (sectionToDelete: string) => {
+    if (!window.confirm(`Are you sure you want to delete section "${sectionToDelete}" and all its routine items?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${API_URL}/api/routines/section/${encodeURIComponent(sectionToDelete)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const newDeleted = Array.from(new Set([...deletedSections, sectionToDelete]));
+      setDeletedSections(newDeleted);
+      localStorage.setItem("deleted_sections", JSON.stringify(newDeleted));
+
+      setRoutines(prev => prev.filter(r => r.section !== sectionToDelete));
+
+      const remaining = allSections.filter(s => s !== sectionToDelete);
+      if (remaining.length > 0) {
+        setSelectedSection(remaining[0]);
+      } else {
+        setSelectedSection("Home");
+      }
+    } catch (err) {
+      console.error("Failed to delete section:", err);
+    }
+  };
 
   const handleShareRoutine = async () => {
     if (!selectedFriend) {
@@ -88,7 +148,8 @@ function RoutinePage() {
 
       const data = await res.json();
       if (res.ok) {
-        setShareMsg(`Successfully shared "${selectedSection}" routine! 🎉`);
+        setShareMsg(`Successfully shared "${selectedSection}" routine with live edit & check access! 🎉`);
+        fetchRoutines();
         setTimeout(() => {
           setShowShareModal(false);
           setShareMsg("");
@@ -112,7 +173,7 @@ function RoutinePage() {
         <div>
           <h1 className="text-2xl font-black text-white">Daily Routine</h1>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
-            Manage & share your daily schedule
+            Manage & share your daily schedule with live collaboration
           </p>
         </div>
       </div>
@@ -120,17 +181,28 @@ function RoutinePage() {
       {/* ── Section tabs (Dynamic including custom sections) ── */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden items-center">
         {allSections.map(section => (
-          <button
-            key={section}
-            onClick={() => setSelectedSection(section)}
-            className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide cursor-pointer whitespace-nowrap transition-all border ${
-              selectedSection === section
-                ? "bg-white text-black border-white"
-                : "bg-white/5 text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/[0.08]"
-            }`}
-          >
-            {section}
-          </button>
+          <div key={section} className="relative group shrink-0 flex items-center">
+            <button
+              onClick={() => setSelectedSection(section)}
+              className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide cursor-pointer whitespace-nowrap transition-all border flex items-center gap-2 ${
+                selectedSection === section
+                  ? "bg-white text-black border-white"
+                  : "bg-white/5 text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/[0.08]"
+              }`}
+            >
+              <span>{section}</span>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteSection(section);
+                }}
+                title={`Delete ${section} section`}
+                className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] opacity-40 hover:opacity-100 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+              >
+                ✕
+              </span>
+            </button>
+          </div>
         ))}
 
         <button
@@ -141,26 +213,67 @@ function RoutinePage() {
         </button>
       </div>
 
+      {/* ── Live Collaboration Banner ── */}
+      {isCollaborativeSection && (
+        <div className="mb-5 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-[0_0_24px_rgba(16,185,129,0.15)]">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </div>
+            <div>
+              <p className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                <span>⚡ Live Teamwork Active</span>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Google-Sheets Style
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                Collaborating with: <strong className="text-white">{collaborators.map(c => `@${c}`).join(", ")}</strong>
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] text-emerald-400/90 font-mono bg-black/40 px-3 py-1 rounded-xl border border-emerald-500/20">
+            Real-time Edit & Checkoff Sync Enabled
+          </span>
+        </div>
+      )}
+
       {/* ── Routine table container ── */}
       <div className="bg-[#0d0d1a] border border-white/5 rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-              {selectedSection}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                {selectedSection}
+              </p>
+              {filteredRoutines.some(r => r.isShared) && (
+                <span className="px-2 py-0.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[9px] font-bold rounded-md flex items-center gap-1">
+                  👥 Shared by @{filteredRoutines.find(r => r.isShared)?.ownerUsername}
+                </span>
+              )}
+            </div>
             <span className="text-[9px] font-bold text-slate-600">
               {filteredRoutines.length} routine{filteredRoutines.length !== 1 ? "s" : ""}
             </span>
           </div>
 
-          {filteredRoutines.length > 0 && (
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {filteredRoutines.length > 0 && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-xl hover:bg-violet-500/20 transition-all cursor-pointer"
+              >
+                <span>🔗</span> Share Section & Edit Access
+              </button>
+            )}
             <button
-              onClick={() => setShowShareModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-xl hover:bg-violet-500/20 transition-all cursor-pointer"
+              onClick={() => handleDeleteSection(selectedSection)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl hover:bg-red-500/20 transition-all cursor-pointer"
             >
-              <span>🔗</span> Share Section
+              <span>🗑️</span> Delete Section
             </button>
-          )}
+          </div>
         </div>
 
         {loading ? (
@@ -253,7 +366,7 @@ function RoutinePage() {
                 <div>
                   <h3 className="text-sm font-black text-white">Share "{selectedSection}" Routine</h3>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">
-                    Send {filteredRoutines.length} items to a friend
+                    Give live edit & check access to a friend
                   </p>
                 </div>
                 <button
@@ -318,7 +431,7 @@ function RoutinePage() {
                     : "bg-violet-600 hover:bg-violet-500 text-white shadow-[0_0_16px_rgba(139,92,246,0.3)]"
                 }`}
               >
-                {shareLoading ? "Sharing..." : "🔗 Send Routine"}
+                {shareLoading ? "Sharing..." : "🔗 Share Live Access"}
               </button>
             </div>
           </div>

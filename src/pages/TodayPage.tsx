@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { API_URL } from "../config/api";
+import { useFriends } from "../context/FriendsContext";
+import { useSocket } from "../context/SocketContext";
 
 interface Todo {
   id: number;
@@ -8,6 +10,9 @@ interface Todo {
   date: string;
   listId: string;
   time?: string;
+  isShared?: boolean;
+  isFromFriend?: boolean;
+  ownerUsername?: string;
 }
 
 interface TodoList {
@@ -15,7 +20,11 @@ interface TodoList {
   name: string;
   emoji: string;
   color: string;
-  dateBound: boolean; 
+  dateBound: boolean;
+  isShared?: boolean;
+  isFromFriend?: boolean;
+  ownerUsername?: string;
+  sharedWithUsernames?: string[];
 }
 
 const LIST_COLORS = ["#10b981","#6366f1","#f59e0b","#ef4444","#3b82f6","#ec4899","#8b5cf6","#14b8a6"];
@@ -43,6 +52,9 @@ export default function TodayPage() {
   const token   = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
+  const { friends } = useFriends();
+  const { socket }  = useSocket();
+
   const [selectedDate, setSelectedDate] = useState(today);
   const [allTodos,     setAllTodos]     = useState<Todo[]>([]);
   const [lists,         setLists]        = useState<TodoList[]>([DEFAULT_LIST]);
@@ -60,6 +72,15 @@ export default function TodayPage() {
   const [newListColor,   setNewListColor]  = useState("#10b981");
   const [newListGlobal,  setNewListGlobal] = useState(false);
   const [showListMenu,   setShowListMenu]  = useState<string | null>(null);
+
+  // Sharing state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState("");
+  const [shareLoading,   setShareLoading]   = useState(false);
+  const [shareMsg,       setShareMsg]       = useState("");
+  const [shareErr,       setShareErr]       = useState("");
+  const [isSharedDoc,    setIsSharedDoc]    = useState(false);
+  const [collaborators,  setCollaborators]  = useState<string[]>([]);
   
   // Track menu position
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -67,7 +88,6 @@ export default function TodayPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const weekDays = Array.from({ length: 7 }, (_, i) => getDayOffset(i - 3));
 
-useEffect(() => {
   const load = async () => {
     try {
       const res  = await fetch(`${API_URL}/api/today`, { headers });
@@ -81,37 +101,88 @@ useEffect(() => {
       setAllTodos(migrated);
       setNote(data.notes || "");
       
-      // Load lists from MongoDB instead of localStorage
       if (data.lists && data.lists.length > 0) {
         setLists(data.lists);
       } else {
         setLists([DEFAULT_LIST]);
       }
+
+      setIsSharedDoc(!!data.isShared);
+      setCollaborators(data.sharedWithUsernames || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
-  load();
-}, []);
 
-const save = async (todos: Todo[], n = note, l = lists) => {
-  setSaving(true);
-  try {
-    await fetch(`${API_URL}/api/today`, {
-      method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ todos, notes: n, lists: l }),
-    });
-  } catch (e) { console.error(e); }
-  finally { setSaving(false); }
-};
+  useEffect(() => {
+    load();
 
-const saveLists = async (updatedLists: TodoList[]) => {
-  setLists(updatedLists);
-  await save(allTodos, note, updatedLists);
-};
+    if (socket) {
+      socket.on("today_updated", () => {
+        load();
+      });
+    }
+
+    return () => {
+      if (socket) {
+        socket.off("today_updated");
+      }
+    };
+  }, [socket]);
+
+  const save = async (todos: Todo[], n = note, l = lists) => {
+    setSaving(true);
+    try {
+      await fetch(`${API_URL}/api/today`, {
+        method: "PUT",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ todos, notes: n, lists: l }),
+      });
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const saveLists = async (updatedLists: TodoList[]) => {
+    setLists(updatedLists);
+    await save(allTodos, note, updatedLists);
+  };
+
+  const handleShareTasks = async () => {
+    if (!selectedFriend) {
+      setShareErr("Please select a friend to share with");
+      return;
+    }
+
+    setShareLoading(true);
+    setShareMsg("");
+    setShareErr("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/today/share`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientUserId: selectedFriend, listId: activeList }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShareMsg("Successfully shared task list! 🎉");
+        load();
+        setTimeout(() => {
+          setShowShareModal(false);
+          setShareMsg("");
+          setSelectedFriend("");
+        }, 1800);
+      } else {
+        setShareErr(data.message || "Failed to share tasks");
+      }
+    } catch {
+      setShareErr("Failed to share tasks. Please try again.");
+    } finally {
+      setShareLoading(false);
+    }
+  };
 
   const currentList = lists.find(l => l.id === activeList) || lists[0];
   const effectiveDate = currentList?.dateBound === false ? GLOBAL_DATE : selectedDate;
@@ -158,9 +229,9 @@ const saveLists = async (updatedLists: TodoList[]) => {
     save(updated);
   };
 
-  const updateNote = async (val: string) => {
-    setNote(val);
-    save(allTodos, val);
+  const updateNote = (n: string) => {
+    setNote(n);
+    save(allTodos, n);
   };
 
   const openNewList = () => {
@@ -185,18 +256,21 @@ const saveLists = async (updatedLists: TodoList[]) => {
   const submitList = () => {
     if (!newListName.trim()) return;
     if (editListId) {
-      saveLists(lists.map(l => l.id === editListId
-        ? { ...l, name: newListName.trim(), emoji: newListEmoji, color: newListColor, dateBound: !newListGlobal }
-        : l
-      ));
+      const updated = lists.map(l => l.id === editListId ? {
+        ...l, name: newListName.trim(), emoji: newListEmoji, color: newListColor, dateBound: !newListGlobal,
+      } : l);
+      saveLists(updated);
     } else {
-      const id = `list_${Date.now()}`;
-      saveLists([...lists, { id, name: newListName.trim(), emoji: newListEmoji, color: newListColor, dateBound: !newListGlobal }]);
+      const id = "list_" + Date.now();
+      const newList: TodoList = {
+        id, name: newListName.trim(), emoji: newListEmoji, color: newListColor, dateBound: !newListGlobal,
+      };
+      const updated = [...lists, newList];
+      saveLists(updated);
       setActiveList(id);
     }
     setShowNewList(false);
     setEditListId(null);
-    setNewListName("");
   };
 
   const deleteList = (id: string) => {
@@ -224,15 +298,48 @@ const saveLists = async (updatedLists: TodoList[]) => {
   return (
     <div className="min-h-full bg-[#04040a] text-slate-200 pb-10">
       {/* Header */}
-      <div className="px-4 pt-5 pb-3 flex items-center justify-between">
+      <div className="px-4 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-black text-white">Today</h1>
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
-        {saving && <span className="text-[9px] text-slate-600 uppercase tracking-widest animate-pulse">Saving...</span>}
+        <div className="flex items-center gap-2">
+          {saving && <span className="text-[9px] text-slate-600 uppercase tracking-widest animate-pulse">Saving...</span>}
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-xl hover:bg-violet-500/20 transition-all cursor-pointer"
+          >
+            <span>🔗</span> Share List & Tasks
+          </button>
+        </div>
       </div>
+
+      {/* Live Collaboration Banner */}
+      {isSharedDoc && (
+        <div className="mx-4 mb-4 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </div>
+            <div>
+              <p className="text-xs font-black text-emerald-400 uppercase tracking-wider">
+                ⚡ Live Task Collaboration Active
+              </p>
+              {collaborators.length > 0 && (
+                <p className="text-[10px] text-slate-300 mt-0.5">
+                  Shared with: <strong className="text-white">{collaborators.map(c => `@${c}`).join(", ")}</strong>
+                </p>
+              )}
+            </div>
+          </div>
+          <span className="text-[9px] text-emerald-400 font-mono bg-black/40 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
+            Real-time Edit & Checkoff
+          </span>
+        </div>
+      )}
 
       {/* Week strip */}
       <div className="px-4 mb-5">
@@ -322,6 +429,7 @@ const saveLists = async (updatedLists: TodoList[]) => {
                 >
                   <span>{list.emoji}</span>
                   <span>{list.name}</span>
+                  {list.isFromFriend && <span className="text-[8px] bg-violet-500/20 text-violet-300 px-1 rounded">@{list.ownerUsername}</span>}
                   {!list.dateBound && <span className="text-[8px] opacity-60">∞</span>}
                   {count > 0 && (
                     <span className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white ml-0.5"
@@ -387,11 +495,20 @@ const saveLists = async (updatedLists: TodoList[]) => {
       {/* Todo card */}
       <div className="px-4 mb-4">
         <div className="bg-[#0d0d1a] border border-white/[0.06] rounded-2xl overflow-hidden">
-          <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-white/[0.04]">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0" style={{ background: (currentList?.color || "#10b981") + "20" }}>{currentList?.emoji || "📝"}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-white">{currentList?.name}</p>
-              <p className="text-[9px] text-slate-600 uppercase tracking-widest">{currentList?.dateBound === false ? "∞ global list — same every day" : todosForView.length === 0 ? "No tasks" : `${done.length}/${todosForView.length} done`}</p>
+          <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-white/[0.04]">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0" style={{ background: (currentList?.color || "#10b981") + "20" }}>{currentList?.emoji || "📝"}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-white flex items-center gap-2">
+                  <span>{currentList?.name}</span>
+                  {currentList?.isFromFriend && (
+                    <span className="text-[9px] bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded-md border border-violet-500/30">
+                      Shared by @{currentList.ownerUsername}
+                    </span>
+                  )}
+                </p>
+                <p className="text-[9px] text-slate-600 uppercase tracking-widest">{currentList?.dateBound === false ? "∞ global list — same every day" : todosForView.length === 0 ? "No tasks" : `${done.length}/${todosForView.length} done`}</p>
+              </div>
             </div>
           </div>
           <div className="px-4 py-3 space-y-2 max-h-[45vh] overflow-y-auto">
@@ -450,6 +567,93 @@ const saveLists = async (updatedLists: TodoList[]) => {
           <textarea className="w-full bg-transparent px-4 py-3 text-sm text-slate-300 outline-none resize-none placeholder:text-slate-600 min-h-[140px]" placeholder="Write your reminders..." value={note} onChange={e => updateNote(e.target.value)} />
         </div>
       </div>
+
+      {/* Share Tasks Modal */}
+      {showShareModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/70 z-50 backdrop-blur-sm"
+            onClick={() => setShowShareModal(false)}
+          />
+
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] pointer-events-auto p-5">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+                <div>
+                  <h3 className="text-sm font-black text-white">Share Tasks & Lists</h3>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">
+                    Give live edit & check access to a friend
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {shareMsg && (
+                <div className="mb-4 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold">
+                  {shareMsg}
+                </div>
+              )}
+
+              {shareErr && (
+                <div className="mb-4 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold">
+                  ⚠️ {shareErr}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-400 mb-2 font-medium">Select Friend:</p>
+
+              {friends.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-white/10 rounded-xl mb-4">
+                  <p className="text-xs text-slate-500">No friends found yet.</p>
+                  <p className="text-[10px] text-slate-600 mt-1">Add friends in the Chat / Connections tab first!</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto mb-4 pr-1">
+                  {friends.map(friend => (
+                    <div
+                      key={friend._id}
+                      onClick={() => setSelectedFriend(friend._id)}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        selectedFriend === friend._id
+                          ? "bg-violet-500/20 border-violet-500/40 text-white"
+                          : "bg-white/[0.03] border-white/5 text-slate-300 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-xs font-black text-violet-400 uppercase">
+                          {friend.username.charAt(0)}
+                        </div>
+                        <span className="text-xs font-bold">{friend.username}</span>
+                      </div>
+                      {selectedFriend === friend._id && (
+                        <span className="text-xs font-bold text-violet-400">✓ Selected</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={handleShareTasks}
+                disabled={shareLoading || !selectedFriend}
+                className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
+                  shareLoading || !selectedFriend
+                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                    : "bg-violet-600 hover:bg-violet-500 text-white shadow-[0_0_16px_rgba(139,92,246,0.3)]"
+                }`}
+              >
+                {shareLoading ? "Sharing..." : "🔗 Share Live Task Access"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   );
 }
