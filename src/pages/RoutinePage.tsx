@@ -39,7 +39,22 @@ function RoutinePage() {
     }
   };
 
-  useEffect(() => { fetchRoutines(); }, []);
+  useEffect(() => {
+    fetchRoutines();
+
+    const handleRoutineUpdated = (e: Event) => {
+      fetchRoutines();
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.section) {
+        setSelectedSection(customEvent.detail.section);
+      }
+    };
+
+    window.addEventListener("routine_updated", handleRoutineUpdated);
+    return () => {
+      window.removeEventListener("routine_updated", handleRoutineUpdated);
+    };
+  }, []);
 
   // Compute all unique sections (defaults + custom sections from routines)
   const existingSections = Array.from(new Set(routines.map(r => r.section).filter(Boolean)));

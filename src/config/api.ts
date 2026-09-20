@@ -1,4 +1,5 @@
 export const API_URL =
-  import.meta.env.MODE === "development"
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.MODE === "development"
     ? "http://localhost:5000"
-    : "https://routineapp-backend-production.up.railway.app";
+    : "https://routineapp-backend.onrender.com");

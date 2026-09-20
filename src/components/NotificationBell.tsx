@@ -57,9 +57,32 @@ const isMobile = () => window.innerWidth < 768;
 // ── Shared notification list content ─────────────────────────────────────────
 function NotifContent({ notifications, pendingRequests, activeTab, setActiveTab, onDelete, onAccept, onReject, onNotifClick }: any) {
   const unreadCount = notifications.filter((n: NotifItem) => !n.read).length;
+  const [hasOSPermission, setHasOSPermission] = useState<boolean>(
+    typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted"
+  );
+
+  const handleEnableOSNotifs = async () => {
+    const granted = await requestPermission();
+    setHasOSPermission(granted);
+  };
 
   return (
     <>
+      {!hasOSPermission && typeof window !== "undefined" && "Notification" in window && Notification.permission !== "denied" && (
+        <div className="px-4 py-2 bg-indigo-500/10 border-b border-indigo-500/20 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs">📱</span>
+            <p className="text-[10px] text-indigo-300 font-bold">Enable Phone Notifications</p>
+          </div>
+          <button
+            onClick={handleEnableOSNotifs}
+            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[9px] font-black uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+          >
+            Allow
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex border-b border-white/5 shrink-0">
         <button onClick={() => setActiveTab("all")} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wide transition-colors cursor-pointer ${activeTab === "all" ? "text-white border-b-2 border-emerald-500" : "text-slate-600 hover:text-slate-400"}`}>
@@ -88,6 +111,17 @@ function NotifContent({ notifications, pendingRequests, activeTab, setActiveTab,
                 <p className={`text-xs font-bold truncate ${notif.read ? "text-slate-400" : "text-white"}`}>{notif.title}</p>
                 {(notif.body || (notif as any).message) && <p className="text-[10px] text-slate-500 mt-0.5 truncate">{notif.body || (notif as any).message}</p>}
                 <p className="text-[9px] text-slate-600 mt-1 uppercase tracking-wide">{timeAgo(notif.createdAt)}</p>
+                {notif.type === "routine_share" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNotifClick(notif);
+                    }}
+                    className="mt-2 px-2.5 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold rounded-lg hover:bg-indigo-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>👁️</span> Preview & Import Routine
+                  </button>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 {!notif.read && <div className="w-2 h-2 bg-emerald-500 rounded-full" />}
@@ -331,8 +365,17 @@ export default function NotificationBell() {
   };
 
   const [sharedNotifModal, setSharedNotifModal] = useState<NotifItem | null>(null);
+  const [targetSectionName, setTargetSectionName] = useState("");
   const [importing,        setImporting]        = useState(false);
   const [importMsg,        setImportMsg]        = useState("");
+
+  const parseNotifData = (data: any) => {
+    if (!data) return {};
+    if (typeof data === "string") {
+      try { return JSON.parse(data); } catch { return {}; }
+    }
+    return data;
+  };
 
   const handleNotifClick = async (notif: NotifItem) => {
     await markRead(notif._id);
@@ -342,13 +385,22 @@ export default function NotificationBell() {
     if (notif.type === "friend_accepted")  navigate("/chat");
     if (notif.type === "todo_reminder")    navigate("/today");
     if (notif.type === "routine_reminder") navigate("/");
-    if (notif.type === "routine_share")    setSharedNotifModal(notif);
+    if (notif.type === "routine_share") {
+      const parsedData = parseNotifData(notif.data);
+      setTargetSectionName(parsedData.section || "Shared Routine");
+      setSharedNotifModal(notif);
+    }
   };
 
+  const activeNotifData = parseNotifData(sharedNotifModal?.data);
+  const activeRoutines  = Array.isArray(activeNotifData.routines) ? activeNotifData.routines : [];
+
   const handleImportSharedRoutine = async () => {
-    if (!sharedNotifModal || !sharedNotifModal.data) return;
+    if (!sharedNotifModal || activeRoutines.length === 0) return;
     setImporting(true);
     setImportMsg("");
+
+    const destSection = targetSectionName.trim() || activeNotifData.section || "Imported";
 
     try {
       const res = await fetch(`${API_URL}/api/routines/import`, {
@@ -358,19 +410,23 @@ export default function NotificationBell() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          section:  sharedNotifModal.data.section,
-          routines: sharedNotifModal.data.routines,
+          section:       activeNotifData.section,
+          targetSection: destSection,
+          routines:      activeRoutines,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        setImportMsg(`Imported ${data.count} routine items into "${sharedNotifModal.data.section}"! 🎉`);
+        setImportMsg(`Imported ${data.count} items into "${destSection}"! 🎉`);
+        window.dispatchEvent(new CustomEvent("routine_updated", { detail: { section: destSection } }));
         setTimeout(() => {
           setSharedNotifModal(null);
           setImportMsg("");
           navigate("/");
-        }, 1800);
+        }, 1500);
+      } else {
+        setImportMsg(data.message || "Failed to import routines.");
       }
     } catch {
       setImportMsg("Failed to import routines.");
@@ -425,7 +481,7 @@ export default function NotificationBell() {
       )}
 
       {/* Shared Routine Import Modal */}
-      {sharedNotifModal && sharedNotifModal.data && (
+      {sharedNotifModal && (
         <>
           <div className="fixed inset-0 bg-black/70 z-[110] backdrop-blur-sm" onClick={() => setSharedNotifModal(null)} />
           <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 pointer-events-none">
@@ -434,7 +490,7 @@ export default function NotificationBell() {
                 <div>
                   <h3 className="text-sm font-black text-white">📋 Shared Routine Preview</h3>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
-                    From {sharedNotifModal.data.senderUsername || "a friend"} • Section: "{sharedNotifModal.data.section}"
+                    From {activeNotifData.senderUsername || "a friend"} • Shared Section: "{activeNotifData.section || "Routine"}"
                   </p>
                 </div>
                 <button onClick={() => setSharedNotifModal(null)} className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer">
@@ -448,29 +504,50 @@ export default function NotificationBell() {
                 </div>
               )}
 
+              {/* Routine list preview */}
               <div className="max-h-48 overflow-y-auto space-y-2 mb-4 pr-1">
-                {Array.isArray(sharedNotifModal.data.routines) && sharedNotifModal.data.routines.map((r: any, idx: number) => (
-                  <div key={idx} className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-white">{r.activity}</p>
-                      {r.notes && <p className="text-[10px] text-slate-500">{r.notes}</p>}
+                {activeRoutines.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-4">No routine items preview available.</p>
+                ) : (
+                  activeRoutines.map((r: any, idx: number) => (
+                    <div key={idx} className="p-2.5 bg-white/[0.03] border border-white/5 rounded-xl flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-white">{r.activity}</p>
+                        {r.notes && <p className="text-[10px] text-slate-400 mt-0.5">{r.notes}</p>}
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="text-[10px] font-mono text-emerald-400">{r.time}</span>
+                        {r.duration && <p className="text-[9px] text-slate-500">{r.duration}</p>}
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-2">
-                      <span className="text-[10px] font-mono text-emerald-400">{r.time}</span>
-                      {r.duration && <p className="text-[9px] text-slate-500">{r.duration}</p>}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
+              </div>
+
+              {/* Target Section Input */}
+              <div className="mb-4">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Import into Section:
+                </label>
+                <input
+                  type="text"
+                  value={targetSectionName}
+                  onChange={(e) => setTargetSectionName(e.target.value)}
+                  placeholder="e.g. Home, Class Routine, etc."
+                  className="w-full bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500/50 transition-colors"
+                />
               </div>
 
               <button
                 onClick={handleImportSharedRoutine}
-                disabled={importing}
+                disabled={importing || activeRoutines.length === 0}
                 className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
-                  importing ? "bg-slate-800 text-slate-600 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)]"
+                  importing || activeRoutines.length === 0
+                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                    : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)]"
                 }`}
               >
-                {importing ? "Importing..." : `📥 Import ${sharedNotifModal.data.routines?.length || 0} Items to My Routine`}
+                {importing ? "Importing..." : `📥 Import ${activeRoutines.length} Items to My Routine`}
               </button>
             </div>
           </div>
